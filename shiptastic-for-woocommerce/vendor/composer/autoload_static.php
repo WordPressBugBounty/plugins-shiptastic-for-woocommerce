@@ -122,6 +122,7 @@ class ComposerStaticInitf2b1dea658d0709a64077fc5b7756fdb
         'Vendidero\\Shiptastic\\Admin\\Preview\\Shipment' => __DIR__ . '/../..' . '/src/Admin/Preview/Shipment.php',
         'Vendidero\\Shiptastic\\Admin\\ReturnTable' => __DIR__ . '/../..' . '/src/Admin/ReturnTable.php',
         'Vendidero\\Shiptastic\\Admin\\Settings' => __DIR__ . '/../..' . '/src/Admin/Settings.php',
+        'Vendidero\\Shiptastic\\Admin\\Setup\\Wizard' => __DIR__ . '/../..' . '/src/Admin/Setup/Wizard.php',
         'Vendidero\\Shiptastic\\Admin\\Table' => __DIR__ . '/../..' . '/src/Admin/Table.php',
         'Vendidero\\Shiptastic\\Admin\\Tabs\\General' => __DIR__ . '/../..' . '/src/Admin/Tabs/General.php',
         'Vendidero\\Shiptastic\\Admin\\Tabs\\Packaging' => __DIR__ . '/../..' . '/src/Admin/Tabs/Packaging.php',

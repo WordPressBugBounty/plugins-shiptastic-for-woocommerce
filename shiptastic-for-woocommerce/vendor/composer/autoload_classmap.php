@@ -74,6 +74,7 @@ return array(
     'Vendidero\\Shiptastic\\Admin\\Preview\\Shipment' => $baseDir . '/src/Admin/Preview/Shipment.php',
     'Vendidero\\Shiptastic\\Admin\\ReturnTable' => $baseDir . '/src/Admin/ReturnTable.php',
     'Vendidero\\Shiptastic\\Admin\\Settings' => $baseDir . '/src/Admin/Settings.php',
+    'Vendidero\\Shiptastic\\Admin\\Setup\\Wizard' => $baseDir . '/src/Admin/Setup/Wizard.php',
     'Vendidero\\Shiptastic\\Admin\\Table' => $baseDir . '/src/Admin/Table.php',
     'Vendidero\\Shiptastic\\Admin\\Tabs\\General' => $baseDir . '/src/Admin/Tabs/General.php',
     'Vendidero\\Shiptastic\\Admin\\Tabs\\Packaging' => $baseDir . '/src/Admin/Tabs/Packaging.php',
