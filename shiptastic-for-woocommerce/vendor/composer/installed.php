@@ -1,8 +1,8 @@
 <?php return array(
     'root' => array(
         'name' => 'vendidero/shiptastic-for-woocommerce',
-        'pretty_version' => '4.7.0',
-        'version' => '4.7.0.0',
+        'pretty_version' => '4.7.1',
+        'version' => '4.7.1.0',
         'reference' => null,
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
@@ -56,8 +56,8 @@
             'dev_requirement' => false,
         ),
         'vendidero/shiptastic-for-woocommerce' => array(
-            'pretty_version' => '4.7.0',
-            'version' => '4.7.0.0',
+            'pretty_version' => '4.7.1',
+            'version' => '4.7.1.0',
             'reference' => null,
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
