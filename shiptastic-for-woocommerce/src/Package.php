@@ -18,7 +18,7 @@ class Package {
 	 *
 	 * @var string
 	 */
-	const VERSION = '4.7.1';
+	const VERSION = '4.8.6';
 
 	public static $upload_dir_suffix = '';
 
@@ -73,9 +73,6 @@ class Package {
 			return;
 		}
 
-		add_filter( 'plugin_locale', array( __CLASS__, 'support_german_language_variants' ), 10, 2 );
-		add_filter( 'load_translation_file', array( __CLASS__, 'force_load_german_language_variant' ), 10, 2 );
-
 		if ( function_exists( 'determine_locale' ) ) {
 			$locale = determine_locale();
 		} else {
@@ -85,38 +82,17 @@ class Package {
 
 		$locale = apply_filters( 'plugin_locale', $locale, 'shiptastic-for-woocommerce' );
 
-		load_textdomain( 'shiptastic-for-woocommerce', trailingslashit( WP_LANG_DIR ) . 'shiptastic-for-woocommerce/shiptastic-for-woocommerce-' . $locale . '.mo' );
-		load_plugin_textdomain( 'shiptastic-for-woocommerce', false, plugin_basename( self::get_path() ) . '/i18n/languages/' );
-	}
+		$custom_translation_path = WP_LANG_DIR . '/shiptastic-for-woocommerce/shiptastic-for-woocommerce-' . $locale . '.mo';
+		$plugin_translation_path = WP_LANG_DIR . '/plugins/shiptastic-for-woocommerce-' . $locale . '.mo';
 
-	public static function force_load_german_language_variant( $file, $domain ) {
-		if ( 'shiptastic-for-woocommerce' === $domain && function_exists( 'determine_locale' ) && class_exists( 'WP_Translation_Controller' ) ) {
-			$locale     = determine_locale();
-			$new_locale = self::get_german_language_variant( $locale );
-
-			if ( $new_locale !== $locale ) {
-				$i18n_controller = \WP_Translation_Controller::get_instance();
-				$i18n_controller->load_file( $file, $domain, $locale ); // Force loading the determined file in the original locale.
-			}
+		// If a custom translation exists (by default it will not, as it is not a standard WordPress convention)
+		// we unload the existing translation, then essentially layer the custom translation on top of the canonical
+		// translation. Otherwise, we simply step back and let WP manage things.
+		if ( is_readable( $custom_translation_path ) ) {
+			unload_textdomain( 'shiptastic-for-woocommerce' );
+			load_textdomain( 'shiptastic-for-woocommerce', $custom_translation_path );
+			load_textdomain( 'shiptastic-for-woocommerce', $plugin_translation_path );
 		}
-
-		return $file;
-	}
-
-	protected static function get_german_language_variant( $locale ) {
-		if ( apply_filters( 'woocommerce_shiptastic_force_de_language', in_array( $locale, array( 'de_CH', 'de_CH_informal', 'de_AT' ), true ) ) ) {
-			$locale = apply_filters( 'woocommerce_shiptastic_german_language_variant_locale', 'de_DE' );
-		}
-
-		return $locale;
-	}
-
-	public static function support_german_language_variants( $locale, $domain ) {
-		if ( 'shiptastic-for-woocommerce' === $domain ) {
-			$locale = self::get_german_language_variant( $locale );
-		}
-
-		return $locale;
 	}
 
 	public static function get_locale_info( $country = '' ) {
@@ -213,6 +189,7 @@ class Package {
 				'shipment-tracking' => '\Vendidero\Shiptastic\Compatibility\ShipmentTracking',
 				'wpml'              => '\Vendidero\Shiptastic\Compatibility\WPML',
 				'translatepress'    => '\Vendidero\Shiptastic\Compatibility\TranslatePress',
+				'sendcloud'         => '\Vendidero\Shiptastic\Compatibility\Sendcloud',
 			)
 		);
 
@@ -503,6 +480,30 @@ class Package {
 		return apply_filters( 'woocommerce_shiptastic_base_country_supports_export_reference_number', self::country_belongs_to_eu_customs_area( $base_country ) );
 	}
 
+	public static function get_available_incoterms() {
+		return apply_filters(
+			'woocommerce_shiptastic_available_incoterms',
+			array(
+				'DAP' => _x( 'Delivered at Place (DAP)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DPU' => _x( 'Delivered at Place Unloaded (DPU)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DDP' => _x( 'Delivered Duty Paid (DDP)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DDU' => _x( 'Delivered Duty Unpaid (DDU)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'EXW' => _x( 'ExWorks (EXW)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'FCA' => _x( 'Free Carrier (FCA)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'CPT' => _x( 'Carriage Paid To (CPT)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'CIP' => _x( 'Carriage and Insurance Paid To (CIP)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'FAS' => _x( 'Free Alongside Ship (FAS)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'FOB' => _x( 'Free on Board (FOB)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'CFR' => _x( 'Cost and Freight (CFR)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'CIF' => _x( 'Cost, Insurance and Freight (CIF)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DAF' => _x( 'Delivered at Frontier (DAF)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DAT' => _x( 'Delivered at Terminal (DAT)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DEQ' => _x( 'Delivery ex Quay (DEQ)', 'shipments', 'shiptastic-for-woocommerce' ),
+				'DES' => _x( 'Delivered ex Ship (DES)', 'shipments', 'shiptastic-for-woocommerce' ),
+			)
+		);
+	}
+
 	public static function get_shipping_zone( $country, $args = array() ) {
 		$zone = 'int';
 
@@ -643,6 +644,10 @@ class Package {
 
 	public static function get_dimensions_unit_label( $unit ) {
 		return class_exists( 'Automattic\WooCommerce\Utilities\I18nUtil' ) ? I18nUtil::get_dimensions_unit_label( $unit ) : $unit;
+	}
+
+	public static function get_weight_unit_label( $unit ) {
+		return class_exists( 'Automattic\WooCommerce\Utilities\I18nUtil' ) ? I18nUtil::get_weight_unit_label( $unit ) : $unit;
 	}
 
 	/**
@@ -913,6 +918,10 @@ class Package {
 			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', trailingslashit( self::get_path() ) . 'shiptastic-for-woocommerce.php', true );
 			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'cart_checkout_blocks', trailingslashit( self::get_path() ) . 'shiptastic-for-woocommerce.php', true );
 		}
+	}
+
+	public static function woo_supports_providers() {
+		return defined( 'WC_ABSPATH' ) && file_exists( WC_ABSPATH . 'src/Internal/Fulfillments/ShippingProviders.php' );
 	}
 
 	public static function register_data_stores( $stores ) {

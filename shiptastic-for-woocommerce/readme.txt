@@ -2,17 +2,17 @@
 Contributors: vendidero, vdwoocommercesupport
 Tags: shipping, woocommerce, shipments, rules, woo
 Requires at least: 5.4
-Tested up to: 6.8
-Stable tag: 4.7.1
+Tested up to: 6.9
+Stable tag: 4.8.6
 Requires PHP: 5.6
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
-Shiptastic for WooCommerce is your all-in-one shipping solution for WooCommerce. From partial shipments to shipping rules, Shiptastic got you covered.
+Shiptastic for WooCommerce is your all-in-one shipping and fulfillment solution for WooCommerce.
 
 == Description ==
 
-Shiptastic for WooCommerce is your all-in-one shipping solution for WooCommerce. From partial shipments to shipping rules, Shiptastic got you covered.
+Shiptastic for WooCommerce is your all-in-one shipping and fulfillment solution for WooCommerce covering (partial) shipments, return management & much more.
 
 * *Shipments* - Create (partial) shipments for orders - either automatically or by hand.
 * *Returns* - Allow your customers to submit return requests for orders. Review and process requests from within your admin panel.
@@ -20,9 +20,34 @@ Shiptastic for WooCommerce is your all-in-one shipping solution for WooCommerce.
 * *Shipping Rules* - Create complex shipping scenarios and calculate shipping costs based on your packaging options.
 * *Shipping Service Providers* - Either use one of our available provider integrations or manually add you shipping service provider.
 
+= Order Fulfillment =
+
+With Shiptastic for WooCommerce you may fulfill your orders right from your WooCommerce backend instead of relying on expensive third-party services.
+Create shipments, either automatically or manually, which sync all necessary data (e.g. packaging, weight, dimensions) based on your products and
+choose different shipping service providers to create labels. Send notifications to your customers with tracking links and descriptions as soon as a shipment is marked as shipped.
+
+= Handle returns with ease =
+
+Shiptastic for WooCommerce makes accepting returns easier for you and your customers. Allow your customers (guest and registered customers) to create return requests for applicable orders which you may either automatically accept or manually approve.
+Notify your customers about return shipments and send return instructions, including return labels, to your customers. Optionally charge a fee for a return which will be automatically deducted from the refund created to the return shipment.
+
 = UPS® integration =
 
 Shiptastic comes with a ready-made [integration for UPS](https://wordpress.org/plugins/shiptastic-integration-for-ups). Navigate to WooCommerce > Settings > Shiptastic > Shipping Service Providers and install UPS to create labels for Shipments & Returns right from your dashboard and provide your customers with an easy way to select UPS Access Point™ delivery from within your checkout.
+
+= DHL & Deutsche Post integration =
+
+Business customers from Germany benefit from our [integration for DHL & Deutsche Post](https://wordpress.org/plugins/shiptastic-integration-for-dhl). Navigate to WooCommerce > Settings > Shiptastic > Shipping Service Providers and install DHL to create labels for Shipments & Returns right from your dashboard and provide your customers with an easy way to select Packstation/Postfiliale/Paketshop delivery from within your checkout.
+
+== Frequently Asked Questions ==
+
+= Where can I find the docs? =
+Find the [docs](https://vendidero.com/doc/shiptastic/home-shiptastic) on our website.
+
+= How to accept return requests from guests? =
+Make sure that you've created a page with the [shiptastic_return_request_form] shortcode. This shortcode will provide
+customers (guests, registered customers) with a form to submit a return requests to an order applicable. Also make sure that the
+shipping service provider linked to the order/shipment has the return options enabled.
 
 == Installation ==
 
@@ -40,9 +65,46 @@ We recommend installing Shiptastic for WooCommerce through the WordPress Backend
 
 1. Manage shipments
 2. Create shipping scenarios
-3. Manage returns
+3. Order Fulfillment
+4. Customer return requests
+5. Pickup location delivery
+6. Manage returns
 
 == Changelog ==
+= 4.8.6 =
+* Improvement: Do not fire order shipped actions when order is in bad state, e.g. failed, cancelled
+* Fix: Bundle weight calculation for assembled bundles
+* Fix: Order status UI update when saving shipments
+
+= 4.8.5 =
+* Improvement: Woo 10.4 wc_enqueue_js replacement
+* Fix: Fallback compatibility for wp_is_valid_utf8
+
+= 4.8.4 =
+* Improvement: Store alternate billing address in shipment
+* Improvement: Use billing address as default return shipper address
+* Improvement: WooCommerce Shipment Tracking compatibility
+* Fix: Default shipping provider list + tracking url
+
+= 4.8.3 =
+* Improvement: Add optional shipping weight
+* Improvement: Add US customs MID-code
+
+= 4.8.2 =
+* Improvement: Add bridging to Woo bundled shipping provider list to improve defaults
+* Fix: Address splitter edge cases
+
+= 4.8.1 =
+* Fix: Pickup location select for existing customers
+* Fix: Reset shipper return address in case not used
+
+= 4.8.0 =
+* Improvement: WPML (Email) compatibility
+* Improvement: Do not remove local pickup for separately shipped products
+* Improvement: Extend shipment data schema to allow manually supplying tracking URL, instructions and provider title
+* Improvement: Parse Sendcloud order notes and update shipment(s)
+* Improvement: Persist the order return status just like the shipping status
+
 = 4.7.1 =
 * Fix: Fallback to default shipping provider for orders
 
