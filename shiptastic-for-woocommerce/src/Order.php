@@ -30,7 +30,7 @@ class Order {
 	/**
 	 * The actual order item object
 	 *
-	 * @var object
+	 * @var WC_Order
 	 */
 	protected $order;
 
@@ -147,14 +147,10 @@ class Order {
 		return apply_filters( 'woocommerce_shiptastic_shipment_order_last_tracking_id', $tracking_id, $this );
 	}
 
-	public function set_shipping_status( $new_status ) {
-		if ( in_array( $new_status, array_keys( wc_stc_get_shipment_order_shipping_statuses() ), true ) ) {
-			$this->get_order()->update_meta_data( '_shipping_status', $new_status );
-		}
-	}
-
 	public function update_shipping_status( $new_status, $save = true ) {
-		if ( $new_status !== $this->get_shipping_status( 'edit' ) && in_array( $new_status, array_keys( wc_stc_get_shipment_order_shipping_statuses() ), true ) ) {
+		$old_shipping_status = $this->get_shipping_status( 'edit' );
+
+		if ( apply_filters( 'woocommerce_shiptastic_shipment_order_update_shipping_status', $new_status !== $old_shipping_status, $this, $new_status, $old_shipping_status ) && in_array( $new_status, array_keys( wc_stc_get_shipment_order_shipping_statuses() ), true ) ) {
 			$this->get_order()->update_meta_data( '_shipping_status', $new_status );
 
 			if ( 'shipped' === $new_status ) {
@@ -170,6 +166,16 @@ class Order {
 			if ( ! in_array( $new_status, array( 'delivered', 'partially-delivered', 'shipped' ), true ) ) {
 				$this->get_order()->delete_meta_data( '_date_shipped' );
 			}
+
+			$this->get_order()->update_meta_data(
+				'_shipping_status_transition',
+				array(
+					'from' => $old_shipping_status,
+					'to'   => $new_status,
+				)
+			);
+
+			do_action( 'woocommerce_shiptastic_order_update_shipping_status', $this->get_order(), $new_status, $old_shipping_status );
 
 			if ( $save ) {
 				$this->get_order()->save();
@@ -253,7 +259,9 @@ class Order {
 	}
 
 	public function update_return_status( $new_status, $save = true ) {
-		if ( $new_status !== $this->get_return_status( 'edit' ) && in_array( $new_status, array_keys( wc_stc_get_shipment_order_return_statuses() ), true ) ) {
+		$old_return_status = $this->get_return_status( 'edit' );
+
+		if ( apply_filters( 'woocommerce_shiptastic_shipment_order_update_return_status', $new_status !== $old_return_status, $this, $new_status, $old_return_status ) && in_array( $new_status, array_keys( wc_stc_get_shipment_order_return_statuses() ), true ) ) {
 			$this->get_order()->update_meta_data( '_return_status', $new_status );
 
 			if ( 'returned' === $new_status ) {
@@ -263,6 +271,16 @@ class Order {
 			if ( ! in_array( $new_status, array( 'returned' ), true ) ) {
 				$this->get_order()->delete_meta_data( '_date_returned' );
 			}
+
+			$this->get_order()->update_meta_data(
+				'_return_status_transition',
+				array(
+					'from' => $old_return_status,
+					'to'   => $new_status,
+				)
+			);
+
+			do_action( 'woocommerce_shiptastic_order_update_return_status', $this->get_order(), $new_status, $old_return_status );
 
 			if ( $save ) {
 				$this->get_order()->save();
@@ -330,9 +348,37 @@ class Order {
 		return $return_status;
 	}
 
-	public function supports_third_party_email_transmission() {
-		$supports_email_transmission = Package::base_country_belongs_to_eu_customs_area() ? false : true;
+	public function get_shipping_to_country( $context = 'view' ) {
+		if ( $this->get_order()->has_shipping_address() ) {
+			$country = $this->get_order()->get_shipping_country();
+		} else {
+			$country = $this->get_order()->get_billing_country();
+		}
 
+		return $country;
+	}
+
+	public function get_shipping_to_postcode( $context = 'view' ) {
+		if ( $this->get_order()->has_shipping_address() ) {
+			$country = $this->get_order()->get_shipping_postcode();
+		} else {
+			$country = $this->get_order()->get_billing_postcode();
+		}
+
+		return $country;
+	}
+
+	public function supports_third_party_email_transmission() {
+		$supports_email_transmission = true;
+		$is_third_country            = Package::is_shipping_international( $this->get_shipping_to_country(), array( 'postcode' => $this->get_shipping_to_postcode() ) );
+
+		if ( Package::base_country_belongs_to_eu_customs_area() && ! $is_third_country ) {
+			$supports_email_transmission = false;
+		}
+
+		/**
+		 * Opted-in
+		 */
 		if ( 'yes' === $this->get_order()->get_meta( '_parcel_delivery_opted_in' ) ) {
 			$supports_email_transmission = true;
 		}
@@ -562,8 +608,8 @@ class Order {
 	 *
 	 * @return float|\WP_Error
 	 */
-	public function get_return_costs( $items, $tax_display = '', $round = true ) {
-		$returns     = $this->create_returns_as_draft( $items );
+	public function get_return_costs( $items, $tax_display = '', $round = true, $self_arrange = false ) {
+		$returns     = $this->create_returns_as_draft( $items, array( 'is_self_arranged' => $self_arrange ) );
 		$tax_display = $tax_display ? $tax_display : get_option( 'woocommerce_tax_display_cart' );
 		$costs       = 0.0;
 
@@ -680,9 +726,19 @@ class Order {
 			$props,
 			array(
 				'is_customer_requested' => false,
+				'is_self_arranged'      => false,
 				'default_status'        => 'processing',
 			)
 		);
+
+		if ( true === $props['is_self_arranged'] ) {
+			$props = array_merge(
+				$props,
+				array(
+					'shipping_provider_title' => _x( 'Unknown', 'shipments-shipping-provider-title', 'shiptastic-for-woocommerce' ),
+				)
+			);
+		}
 
 		if ( $this->needs_return() ) {
 			$packages = $this->get_return_packages( $return_items );
@@ -751,7 +807,7 @@ class Order {
 										$props,
 										array(
 											'packaging_id' => $packaging->get_id(),
-											'shipping_method' => $this->get_shipping_method_id( $method_id ),
+											'shipping_method' => $props['is_self_arranged'] ? '' : $this->get_shipping_method_id( $method_id ),
 										)
 									),
 									'save'  => false,
@@ -792,7 +848,7 @@ class Order {
 							'props' => array_replace_recursive(
 								$props,
 								array(
-									'shipping_method' => $this->get_shipping_method_id( $method_id ),
+									'shipping_method' => $props['is_self_arranged'] ? '' : $this->get_shipping_method_id( $method_id ),
 								)
 							),
 							'items' => $shipment_items,

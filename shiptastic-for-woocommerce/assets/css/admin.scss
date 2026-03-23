@@ -434,6 +434,12 @@ p.wc-stc-product-settings-subtitle {
       max-width: 100%;
     }
 
+    textarea {
+      width: 100%;
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+
     &.form-field-checkbox {
       display: flex;
       flex-wrap: wrap;
@@ -801,9 +807,15 @@ tbody.packaging_list {
     color: #573b00;
   }
 
-  &.status-not-shipped {
+  &.status-not-shipped, &.status-rejected {
     background: #eba3a3;
     color: #570000;
+  }
+
+  &.shipment-status-secondary {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px #573b00;
+    color: #573b00;
   }
 
   &.status-delivered, &.status-shipped, &.status-shipped, &.status-returned, &.status-no-shipping-needed {
@@ -832,6 +844,7 @@ a.button.wc-stc-shipment-action-button {
   height: 2em;
   width: 2em;
   overflow: hidden;
+  min-height: 30px;
   vertical-align: middle;
 
   &::after {
@@ -1392,19 +1405,18 @@ a.button.wc-stc-shipment-action-button {
 
         .shipment-footer-inner {
           display: flex;
+          gap: 1.5em;
           flex-wrap: nowrap;
           justify-content: flex-end;
           padding: 0 .5em;
 
           a.shipment-footer-action {
-            margin-right: 1em;
-
-            &:last-child, &:last-of-type {
-              margin-right: 0;
+            &.delete, &.decline-return-shipment {
+              color: #a00;
             }
 
-            &.delete {
-              color: #a00;
+            .woocommerce-help-tip {
+              margin-left: 0;
             }
           }
         }
@@ -1419,6 +1431,11 @@ a.button.wc-stc-shipment-action-button {
 
         .shipment-status {
           margin-left: 1em;
+        }
+
+        .shipment-is-self-arranged {
+          margin-left: 1em;
+          font-style: italic;
         }
 
         h3 {

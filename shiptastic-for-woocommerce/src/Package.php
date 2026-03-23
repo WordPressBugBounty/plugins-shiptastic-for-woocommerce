@@ -4,6 +4,7 @@ namespace Vendidero\Shiptastic;
 
 use Automattic\WooCommerce\Utilities\I18nUtil;
 use Exception;
+use Vendidero\Shiptastic\API\Helper;
 use Vendidero\Shiptastic\Registry\Container;
 use Vendidero\Shiptastic\ShippingMethod\MethodHelper;
 
@@ -18,7 +19,7 @@ class Package {
 	 *
 	 * @var string
 	 */
-	const VERSION = '4.8.6';
+	const VERSION = '5.0.0';
 
 	public static $upload_dir_suffix = '';
 
@@ -52,6 +53,7 @@ class Package {
 
 		add_filter( 'woocommerce_locate_template', array( __CLASS__, 'filter_templates' ), 50, 3 );
 		add_filter( 'woocommerce_get_query_vars', array( __CLASS__, 'register_endpoints' ), 10, 1 );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_styles' ) );
 
 		if ( ! did_action( 'woocommerce_loaded' ) ) {
 			add_action( 'woocommerce_loaded', array( __CLASS__, 'inject_endpoints' ), 10 );
@@ -66,6 +68,71 @@ class Package {
 		add_action( 'init', array( __CLASS__, 'check_version' ), 10 );
 		add_action( 'init', array( __CLASS__, 'load_plugin_textdomain' ) );
 		add_action( 'init', array( __CLASS__, 'load_fallback_compatibility' ) );
+
+		/**
+		 * Webhooks
+		 */
+		add_filter( 'woocommerce_webhook_topic_hooks', array( __CLASS__, 'register_webhooks' ), 10, 2 );
+		add_filter( 'woocommerce_webhook_topics', array( __CLASS__, 'register_webhook_topics' ), 10, 2 );
+
+		add_action( 'woocommerce_shiptastic_oauth_refresh_token', array( __CLASS__, 'refresh_oauth_token' ), 10 );
+	}
+
+	public static function refresh_oauth_token( $api_name ) {
+		if ( $api = Helper::get_api( $api_name ) ) {
+			if ( $auth = $api->get_auth_api() ) {
+				$auth->auth();
+			}
+		}
+	}
+
+	public static function register_webhook_topics( $topics ) {
+		foreach ( wc_stc_get_shipment_type_data() as $shipment_type => $shipment_type_data ) {
+			$hook_suffix = "{$shipment_type}_";
+
+			if ( 'simple' === $shipment_type ) {
+				$hook_suffix = '';
+			}
+
+			$labels = $shipment_type_data['labels'];
+
+			$topics[ "{$hook_suffix}shipment.deleted" ] = sprintf( _x( 'Deleted %s', 'shipments-webhook-topic', 'shiptastic-for-woocommerce' ), $labels['singular'] );
+			$topics[ "{$hook_suffix}shipment.created" ] = sprintf( _x( 'Created %s', 'shipments-webhook-topic', 'shiptastic-for-woocommerce' ), $labels['singular'] );
+			$topics[ "{$hook_suffix}shipment.updated" ] = sprintf( _x( 'Updated %s', 'shipments-webhook-topic', 'shiptastic-for-woocommerce' ), $labels['singular'] );
+
+			$topics[ "{$hook_suffix}shipment_label.created" ] = sprintf( _x( 'Created %s label', 'shipments-webhook-topic', 'shiptastic-for-woocommerce' ), $labels['singular'] );
+			$topics[ "{$hook_suffix}shipment_label.deleted" ] = sprintf( _x( 'Deleted %s label', 'shipments-webhook-topic', 'shiptastic-for-woocommerce' ), $labels['singular'] );
+		}
+
+		return $topics;
+	}
+
+	public static function register_webhooks( $topic_hooks, $webhook_handler ) {
+		foreach ( wc_stc_get_shipment_type_data() as $shipment_type => $shipment_type_data ) {
+			$hook_suffix = "{$shipment_type}_";
+
+			if ( 'simple' === $shipment_type ) {
+				$hook_suffix = '';
+			}
+
+			$topic_hooks[ "{$hook_suffix}shipment.deleted" ]       = array(
+				"woocommerce_shiptastic_{$hook_suffix}shipment_deleted",
+			);
+			$topic_hooks[ "{$hook_suffix}shipment.updated" ]       = array(
+				"woocommerce_shiptastic_{$hook_suffix}shipment_updated",
+			);
+			$topic_hooks[ "{$hook_suffix}shipment.created" ]       = array(
+				"woocommerce_shiptastic_new_{$hook_suffix}shipment",
+			);
+			$topic_hooks[ "{$hook_suffix}shipment_label.created" ] = array(
+				"woocommerce_shiptastic_{$hook_suffix}shipment_created_label",
+			);
+			$topic_hooks[ "{$hook_suffix}shipment_label.deleted" ] = array(
+				"woocommerce_shiptastic_{$hook_suffix}shipment_deleted_label",
+			);
+		}
+
+		return $topic_hooks;
 	}
 
 	public static function load_plugin_textdomain() {
@@ -185,11 +252,12 @@ class Package {
 		$compatibilities = apply_filters(
 			'woocommerce_shiptastic_compatibilities',
 			array(
-				'bundles'           => '\Vendidero\Shiptastic\Compatibility\Bundles',
-				'shipment-tracking' => '\Vendidero\Shiptastic\Compatibility\ShipmentTracking',
-				'wpml'              => '\Vendidero\Shiptastic\Compatibility\WPML',
-				'translatepress'    => '\Vendidero\Shiptastic\Compatibility\TranslatePress',
-				'sendcloud'         => '\Vendidero\Shiptastic\Compatibility\Sendcloud',
+				'bundles'                 => '\Vendidero\Shiptastic\Compatibility\Bundles',
+				'shipment-tracking'       => '\Vendidero\Shiptastic\Compatibility\ShipmentTracking',
+				'wpml'                    => '\Vendidero\Shiptastic\Compatibility\WPML',
+				'translatepress'          => '\Vendidero\Shiptastic\Compatibility\TranslatePress',
+				'sendcloud'               => '\Vendidero\Shiptastic\Compatibility\Sendcloud',
+				'order-withdrawal-button' => '\Vendidero\Shiptastic\Compatibility\OrderWithdrawalButton',
 			)
 		);
 
@@ -589,6 +657,24 @@ class Package {
 			'add-return-shipment',
 			'view-shipments',
 		);
+	}
+
+	public static function is_customer_return_page() {
+		$is_customer_return = function_exists( 'is_wc_endpoint_url' ) ? is_wc_endpoint_url( 'add-return-shipment' ) : false;
+
+		if ( function_exists( 'wc_post_content_has_shortcode' ) && wc_post_content_has_shortcode( 'shiptastic_return_request_form' ) ) {
+			$is_customer_return = true;
+		}
+
+		return $is_customer_return;
+	}
+
+	public static function register_styles() {
+		wp_register_style( 'woocommerce_shiptastic_returns', self::get_assets_url( 'static/returns-styles.css' ), array(), self::get_version() );
+
+		if ( self::is_customer_return_page() ) {
+			wp_enqueue_style( 'woocommerce_shiptastic_returns' );
+		}
 	}
 
 	public static function register_endpoints( $query_vars ) {

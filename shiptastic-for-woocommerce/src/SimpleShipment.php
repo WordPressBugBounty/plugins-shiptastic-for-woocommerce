@@ -189,13 +189,11 @@ class SimpleShipment extends Shipment {
 			$default_provider_instance = wc_stc_get_order_shipping_provider( $order, $args['shipping_method'] );
 			$default_provider          = $default_provider_instance ? $default_provider_instance->get_name() : '';
 			$provider                  = $this->get_shipping_provider( 'edit' );
-			$provider_title            = $this->get_shipping_provider_title( 'edit' );
-			$default_provider          = ! empty( $provider_title ) ? '' : $default_provider; // In case a provider title has been set manually, do not override the provider.
 
 			$args = wp_parse_args(
 				$args,
 				array(
-					'shipping_provider' => ( ! empty( $provider ) ) ? $provider : $default_provider,
+					'shipping_provider' => ( ! empty( $provider ) || $this->get_shipping_provider_title() ) ? $provider : $default_provider,
 				)
 			);
 
@@ -287,8 +285,11 @@ class SimpleShipment extends Shipment {
 			}
 
 			foreach ( $this->get_items() as $item ) {
+				$item_is_missing_from_sync = ! empty( $args['items'] ) && ! isset( $args['items'][ $item->get_order_item_id() ] );
+				$order_item_is_missing     = ! $order->get_item( $item->get_order_item_id() );
+
 				// Remove non-existent items
-				if ( ! $order_item = $order->get_item( $item->get_order_item_id() ) ) {
+				if ( $order_item_is_missing || $item_is_missing_from_sync ) {
 					$this->remove_item( $item->get_id() );
 				}
 			}

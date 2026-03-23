@@ -969,12 +969,13 @@ class Admin {
 
 			woocommerce_wp_text_input(
 				array(
-					'id'          => "_variable_shipping_weight_{$loop}",
-					'name'        => "variable_shipping_weight[{$loop}]",
-					'label'       => $label,
-					'value'       => wc_format_localized_decimal( $shipments_product->get_shipping_weight( 'edit' ) ),
-					'placeholder' => $parent_weight ? $parent_weight : wc_format_localized_decimal( $variation_object->get_weight() ),
-					'data_type'   => 'decimal',
+					'id'            => "_variable_shipping_weight_{$loop}",
+					'name'          => "variable_shipping_weight[{$loop}]",
+					'label'         => $label,
+					'value'         => wc_format_localized_decimal( $shipments_product->get_shipping_weight( 'edit' ) ),
+					'placeholder'   => $parent_weight ? $parent_weight : wc_format_localized_decimal( $variation_object->get_weight() ),
+					'data_type'     => 'decimal',
+					'wrapper_class' => 'form-row form-row-first hide_if_variation_virtual',
 				)
 			);
 		}
@@ -984,7 +985,7 @@ class Admin {
 			$parent_width  = $shipments_parent_product ? wc_format_localized_decimal( $shipments_parent_product->get_shipping_width() ) : '';
 			$parent_height = $shipments_parent_product ? wc_format_localized_decimal( $shipments_parent_product->get_shipping_height() ) : '';
 			?>
-			<p class="form-field form-row dimensions_field shipping_dimensions_field hide_if_variation_virtual form-row-first">
+			<p class="form-field form-row dimensions_field shipping_dimensions_field hide_if_variation_virtual form-row-last">
 				<label for="product_shipping_length">
 					<?php
 					printf(
@@ -996,9 +997,9 @@ class Admin {
 				</label>
 				<?php echo wc_help_tip( _x( 'Length x width x height in decimal form', 'shipments', 'shiptastic-for-woocommerce' ) ); ?>
 				<span class="wrap">
-					<input id="product_shipping_length" placeholder="<?php echo $parent_length ? esc_attr( $parent_length ) : esc_attr( wc_format_localized_decimal( $variation_object->get_length() ) ); ?>" class="input-text wc_input_decimal" size="6" type="text" name="variable_shipping_length[<?php echo esc_attr( $loop ); ?>]" value="<?php echo esc_attr( wc_format_localized_decimal( $shipments_product->get_shipping_length( 'edit' ) ) ); ?>" />
-					<input placeholder="<?php echo $parent_width ? esc_attr( $parent_width ) : esc_attr( wc_format_localized_decimal( $variation_object->get_width() ) ); ?>" class="input-text wc_input_decimal" size="6" type="text" name="variable_shipping_width[<?php echo esc_attr( $loop ); ?>]" value="<?php echo esc_attr( wc_format_localized_decimal( $shipments_product->get_shipping_width( 'edit' ) ) ); ?>" />
-					<input placeholder="<?php echo $parent_height ? esc_attr( $parent_height ) : esc_attr( wc_format_localized_decimal( $variation_object->get_height() ) ); ?>" class="input-text wc_input_decimal last" size="6" type="text" name="variable_shipping_height[<?php echo esc_attr( $loop ); ?>]" value="<?php echo esc_attr( wc_format_localized_decimal( $shipments_product->get_shipping_height( 'edit' ) ) ); ?>" />
+					<input id="product_shipping_length" placeholder="<?php echo $parent_length ? esc_attr( $parent_length ) : ( $variation_object->get_length() ? esc_attr( wc_format_localized_decimal( $variation_object->get_length() ) ) : esc_attr_x( 'Length', 'shipments', 'shiptastic-for-woocommerce' ) ); ?>" class="input-text wc_input_decimal" size="6" type="text" name="variable_shipping_length[<?php echo esc_attr( $loop ); ?>]" value="<?php echo esc_attr( wc_format_localized_decimal( $shipments_product->get_shipping_length( 'edit' ) ) ); ?>" />
+					<input placeholder="<?php echo $parent_width ? esc_attr( $parent_width ) : ( $variation_object->get_width() ? esc_attr( wc_format_localized_decimal( $variation_object->get_width() ) ) : esc_attr_x( 'Width', 'shipments', 'shiptastic-for-woocommerce' ) ); ?>" class="input-text wc_input_decimal" size="6" type="text" name="variable_shipping_width[<?php echo esc_attr( $loop ); ?>]" value="<?php echo esc_attr( wc_format_localized_decimal( $shipments_product->get_shipping_width( 'edit' ) ) ); ?>" />
+					<input placeholder="<?php echo $parent_height ? esc_attr( $parent_height ) : ( $variation_object->get_height() ? esc_attr( wc_format_localized_decimal( $variation_object->get_height() ) ) : esc_attr_x( 'Height', 'shipments', 'shiptastic-for-woocommerce' ) ); ?>" class="input-text wc_input_decimal last" size="6" type="text" name="variable_shipping_height[<?php echo esc_attr( $loop ); ?>]" value="<?php echo esc_attr( wc_format_localized_decimal( $shipments_product->get_shipping_height( 'edit' ) ) ); ?>" />
 				</span>
 			</p>
 			<?php
@@ -1981,25 +1982,26 @@ class Admin {
 				'wc-shiptastic-admin-shipments',
 				'wc_shiptastic_admin_shipments_params',
 				array(
-					'ajax_url'                           => admin_url( 'admin-ajax.php' ),
-					'edit_shipments_nonce'               => wp_create_nonce( 'edit-shipments' ),
-					'order_id'                           => $order_order_post_id,
-					'shipment_locked_excluded_fields'    => array( 'status' ),
-					'i18n_remove_shipment_notice'        => _x( 'Do you really want to delete the shipment?', 'shipments', 'shiptastic-for-woocommerce' ),
-					'remove_label_nonce'                 => wp_create_nonce( 'remove-shipment-label' ),
-					'edit_label_nonce'                   => wp_create_nonce( 'edit-shipment-label' ),
-					'send_return_notification_nonce'     => wp_create_nonce( 'send-return-shipment-notification' ),
-					'refresh_packaging_nonce'            => wp_create_nonce( 'refresh-shipment-packaging' ),
-					'confirm_return_request_nonce'       => wp_create_nonce( 'confirm-return-request' ),
+					'ajax_url'                            => admin_url( 'admin-ajax.php' ),
+					'edit_shipments_nonce'                => wp_create_nonce( 'edit-shipments' ),
+					'order_id'                            => $order_order_post_id,
+					'shipment_locked_excluded_fields'     => array( 'status' ),
+					'i18n_remove_shipment_notice'         => _x( 'Do you really want to delete the shipment?', 'shipments', 'shiptastic-for-woocommerce' ),
+					'remove_label_nonce'                  => wp_create_nonce( 'remove-shipment-label' ),
+					'edit_label_nonce'                    => wp_create_nonce( 'edit-shipment-label' ),
+					'send_return_notification_nonce'      => wp_create_nonce( 'send-return-shipment-notification' ),
+					'refresh_packaging_nonce'             => wp_create_nonce( 'refresh-shipment-packaging' ),
+					'confirm_return_request_nonce'        => wp_create_nonce( 'confirm-return-request' ),
 					'create_return_shipment_refund_submit_nonce' => wp_create_nonce( 'create-return-shipment-refund-submit' ),
-					'add_return_shipment_load_nonce'     => wp_create_nonce( 'add-return-shipment-load' ),
-					'add_return_shipment_submit_nonce'   => wp_create_nonce( 'add-return-shipment-submit' ),
-					'add_shipment_item_load_nonce'       => wp_create_nonce( 'add-shipment-item-load' ),
-					'add_shipment_item_submit_nonce'     => wp_create_nonce( 'add-shipment-item-submit' ),
-					'create_shipment_label_load_nonce'   => wp_create_nonce( 'create-shipment-label-load' ),
-					'create_shipment_label_submit_nonce' => wp_create_nonce( 'create-shipment-label-submit' ),
-					'i18n_remove_label_notice'           => _x( 'Do you really want to delete the label?', 'shipments', 'shiptastic-for-woocommerce' ),
-					'i18n_save_before_create'            => _x( 'Please save the shipment first', 'shipments', 'shiptastic-for-woocommerce' ),
+					'decline_return_request_submit_nonce' => wp_create_nonce( 'decline-return-request-submit' ),
+					'add_return_shipment_load_nonce'      => wp_create_nonce( 'add-return-shipment-load' ),
+					'add_return_shipment_submit_nonce'    => wp_create_nonce( 'add-return-shipment-submit' ),
+					'add_shipment_item_load_nonce'        => wp_create_nonce( 'add-shipment-item-load' ),
+					'add_shipment_item_submit_nonce'      => wp_create_nonce( 'add-shipment-item-submit' ),
+					'create_shipment_label_load_nonce'    => wp_create_nonce( 'create-shipment-label-load' ),
+					'create_shipment_label_submit_nonce'  => wp_create_nonce( 'create-shipment-label-submit' ),
+					'i18n_remove_label_notice'            => _x( 'Do you really want to delete the label?', 'shipments', 'shiptastic-for-woocommerce' ),
+					'i18n_save_before_create'             => _x( 'Please save the shipment first', 'shipments', 'shiptastic-for-woocommerce' ),
 				)
 			);
 		}

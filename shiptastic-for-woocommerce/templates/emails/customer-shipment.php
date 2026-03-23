@@ -11,7 +11,7 @@
  * the readme will list any important changes.
  *
  * @package Shiptastic/Templates/Emails
- * @version 4.3.0
+ * @version 4.9.0
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -27,7 +27,10 @@ do_action( 'woocommerce_email_header', $email_heading, $email ); ?>
 
 	<p>
 		<?php
-		if ( $partial_shipment ) {
+		if ( $is_update ) {
+			/* translators: %s: Site title */
+			printf( esc_html_x( 'Shipping information for your order on %1$s has been updated. Find details below for your reference:', 'shipments', 'shiptastic-for-woocommerce' ), esc_html( wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		} elseif ( $partial_shipment ) {
 			/* translators: %s: Site title */
 			printf( esc_html_x( 'Your order on %1$s has been partially shipped via %2$s. Find details below for your reference:', 'shipments', 'shiptastic-for-woocommerce' ), esc_html( wp_specialchars_decode( get_option( 'blogname' ), ENT_QUOTES ) ), esc_html( wc_stc_get_shipment_shipping_provider_title( $shipment ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		} else {

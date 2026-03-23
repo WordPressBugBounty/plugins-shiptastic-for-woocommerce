@@ -71,6 +71,7 @@ if ( ! class_exists( 'WC_STC_Email_Customer_Return_Shipment', false ) ) :
 			// Triggers for this email.
 			add_action( 'woocommerce_shiptastic_return_shipment_status_draft_to_processing_notification', array( $this, 'trigger' ), 10 );
 			add_action( 'woocommerce_shiptastic_return_shipment_status_requested_to_processing_notification', array( $this, 'trigger' ), 10 );
+			add_action( 'woocommerce_shiptastic_return_shipment_status_rejected_to_processing_notification', array( $this, 'trigger' ), 10 );
 
 			// Call parent constructor.
 			parent::__construct();

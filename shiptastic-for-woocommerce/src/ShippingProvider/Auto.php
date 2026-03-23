@@ -1190,6 +1190,10 @@ abstract class Auto extends Simple implements ShippingProviderAuto {
 		return $settings;
 	}
 
+	public function get_shipping_from_countries() {
+		return $this->get_available_base_countries();
+	}
+
 	protected function get_available_base_countries() {
 		$countries = array();
 
@@ -1621,10 +1625,14 @@ abstract class Auto extends Simple implements ShippingProviderAuto {
 
 			$label->set_shipment( $shipment );
 
+			do_action( "{$this->get_general_hook_prefix()}before_fetch_label", $label, $shipment );
+
 			/**
 			 * Fetch the label via API and store as file
 			 */
 			$result = $label->fetch();
+
+			do_action( "{$this->get_general_hook_prefix()}after_fetch_label", $label, $shipment, $result );
 
 			if ( is_wp_error( $result ) ) {
 				$result = wc_stc_get_shipment_error( $result );
