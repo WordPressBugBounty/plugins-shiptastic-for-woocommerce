@@ -19,7 +19,7 @@ class Package {
 	 *
 	 * @var string
 	 */
-	const VERSION = '5.0.2';
+	const VERSION = '5.0.3';
 
 	public static $upload_dir_suffix = '';
 
@@ -1007,7 +1007,7 @@ class Package {
 	}
 
 	public static function woo_supports_providers() {
-		return defined( 'WC_ABSPATH' ) && file_exists( WC_ABSPATH . 'src/Internal/Fulfillments/ShippingProviders.php' );
+		return defined( 'WC_ABSPATH' ) && ( file_exists( WC_ABSPATH . 'src/Internal/Fulfillments/ShippingProviders.php' ) || file_exists( WC_ABSPATH . 'src/Admin/Features/Fulfillments/ShippingProviders.php' ) );
 	}
 
 	public static function register_data_stores( $stores ) {
