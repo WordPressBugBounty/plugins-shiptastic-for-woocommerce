@@ -202,6 +202,7 @@ class ComposerStaticInitc7ba8447c8657a85681a961344122998
         'Vendidero\\Shiptastic\\Packaging\\ReportHelper' => __DIR__ . '/../..' . '/src/Packaging/ReportHelper.php',
         'Vendidero\\Shiptastic\\Packaging\\ReportQueue' => __DIR__ . '/../..' . '/src/Packaging/ReportQueue.php',
         'Vendidero\\Shiptastic\\Packing\\CartItem' => __DIR__ . '/../..' . '/src/Packing/CartItem.php',
+        'Vendidero\\Shiptastic\\Packing\\DefaultItemSorter' => __DIR__ . '/../..' . '/src/Packing/DefaultItemSorter.php',
         'Vendidero\\Shiptastic\\Packing\\Helper' => __DIR__ . '/../..' . '/src/Packing/Helper.php',
         'Vendidero\\Shiptastic\\Packing\\Item' => __DIR__ . '/../..' . '/src/Packing/Item.php',
         'Vendidero\\Shiptastic\\Packing\\ItemList' => __DIR__ . '/../..' . '/src/Packing/ItemList.php',

@@ -154,6 +154,7 @@ return array(
     'Vendidero\\Shiptastic\\Packaging\\ReportHelper' => $baseDir . '/src/Packaging/ReportHelper.php',
     'Vendidero\\Shiptastic\\Packaging\\ReportQueue' => $baseDir . '/src/Packaging/ReportQueue.php',
     'Vendidero\\Shiptastic\\Packing\\CartItem' => $baseDir . '/src/Packing/CartItem.php',
+    'Vendidero\\Shiptastic\\Packing\\DefaultItemSorter' => $baseDir . '/src/Packing/DefaultItemSorter.php',
     'Vendidero\\Shiptastic\\Packing\\Helper' => $baseDir . '/src/Packing/Helper.php',
     'Vendidero\\Shiptastic\\Packing\\Item' => $baseDir . '/src/Packing/Item.php',
     'Vendidero\\Shiptastic\\Packing\\ItemList' => $baseDir . '/src/Packing/ItemList.php',

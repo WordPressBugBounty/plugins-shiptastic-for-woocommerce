@@ -613,7 +613,7 @@ table.wc-shiptastic-shipping-rules {
         .conditions-columns {
           display: flex;
           flex-wrap: nowrap;
-          align-items: baseline;
+          align-items: center;
           width: 100%;
 
           .shipping-rules-condition-type-container {
@@ -1489,6 +1489,7 @@ a.button.wc-stc-shipment-action-button {
           height: 30px;
           padding-top: 0;
           padding-bottom: 0;
+          max-width: 100%;
         }
 
         label {
@@ -2769,5 +2770,15 @@ table.wc-stc-shipping-providers {
       max-height: 20px;
       margin-right: 5px;
     }
+  }
+}
+
+.woocommerce_page_wc-settings-shipping {
+  p.wc-settings-marketplace-link {
+    display: none !important;
+  }
+
+  .woocommerce-recommended-shipping-extensions {
+    display: none !important;
   }
 }

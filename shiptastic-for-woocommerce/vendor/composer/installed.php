@@ -1,8 +1,8 @@
 <?php return array(
     'root' => array(
         'name' => 'vendidero/shiptastic-for-woocommerce',
-        'pretty_version' => '5.0.3',
-        'version' => '5.0.3.0',
+        'pretty_version' => '5.0.4',
+        'version' => '5.0.4.0',
         'reference' => null,
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
@@ -47,17 +47,17 @@
             'dev_requirement' => false,
         ),
         'setasign/fpdi' => array(
-            'pretty_version' => 'v2.6.6',
-            'version' => '2.6.6.0',
-            'reference' => 'de0cf35911be3e9ea63b48e0f307883b1c7c48ac',
+            'pretty_version' => 'v2.6.7',
+            'version' => '2.6.7.0',
+            'reference' => '388c51e69982a3fc16698710b763e8107a49f510',
             'type' => 'library',
             'install_path' => __DIR__ . '/../setasign/fpdi',
             'aliases' => array(),
             'dev_requirement' => false,
         ),
         'vendidero/shiptastic-for-woocommerce' => array(
-            'pretty_version' => '5.0.3',
-            'version' => '5.0.3.0',
+            'pretty_version' => '5.0.4',
+            'version' => '5.0.4.0',
             'reference' => null,
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
