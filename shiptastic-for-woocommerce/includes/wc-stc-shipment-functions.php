@@ -13,6 +13,7 @@ use Vendidero\Shiptastic\AddressSplitter;
 use Vendidero\Shiptastic\ShipmentFactory;
 use Vendidero\Shiptastic\ShipmentItem;
 use Vendidero\Shiptastic\ShipmentReturnItem;
+use Vendidero\Shiptastic\ShippingProvider\Helper;
 use Vendidero\Shiptastic\SimpleShipment;
 use Vendidero\Shiptastic\ReturnShipment;
 use Vendidero\Shiptastic\Package;
@@ -178,6 +179,16 @@ function wc_stc_get_shipments_by_order( $order ) {
 
 	if ( $order_shipment = wc_stc_get_shipment_order( $order ) ) {
 		$shipments = $order_shipment->get_shipments();
+	}
+
+	return $shipments;
+}
+
+function wc_stc_get_simple_shipments_by_order( $order ) {
+	$shipments = array();
+
+	if ( $order_shipment = wc_stc_get_shipment_order( $order ) ) {
+		$shipments = $order_shipment->get_simple_shipments();
 	}
 
 	return $shipments;
@@ -559,6 +570,26 @@ function wc_stc_create_shipment( $order_shipment, $args = array() ) {
 	}
 
 	return $shipment;
+}
+
+/**
+ * @param string $attachment_type
+ * @param boolean $force_default
+ *
+ * @return \Vendidero\Shiptastic\ShipmentAttachment|WP_Error
+ */
+function wc_stc_create_shipment_attachment( $attachment_type, $force_default = false ) {
+	try {
+		$attachment = wc_stc_get_shipment_attachment( false, $attachment_type, $force_default );
+
+		if ( ! $attachment ) {
+			throw new Exception( esc_html_x( 'Error while creating the shipment attachment instance', 'shipments', 'shiptastic-for-woocommerce' ) );
+		}
+
+		return $attachment;
+	} catch ( Exception $e ) {
+		return new WP_Error( 'error', $e->getMessage() );
+	}
 }
 
 function wc_stc_create_shipment_item( $shipment, $order_item, $args = array() ) {
@@ -1020,16 +1051,22 @@ function _wc_shiptastic_keep_force_filename( $new_filename ) {
 	return isset( $GLOBALS['stc_unique_filename'] ) ? $GLOBALS['stc_unique_filename'] : $new_filename;
 }
 
-function wc_shiptastic_upload_data( $filename, $bits, $relative = true ) {
+function wc_shiptastic_upload_data( $filename, $bits, $relative = true, $force_override = true ) {
 	try {
 		Package::set_upload_dir_filter();
-		$GLOBALS['stc_unique_filename'] = $filename;
-		add_filter( 'wp_unique_filename', '_wc_shiptastic_keep_force_filename', 10, 1 );
+
+		if ( $force_override ) {
+			add_filter( 'wp_unique_filename', '_wc_shiptastic_keep_force_filename', 10, 1 );
+			$GLOBALS['stc_unique_filename'] = $filename;
+		}
 
 		$tmp = wp_upload_bits( $filename, null, $bits );
 
-		unset( $GLOBALS['stc_unique_filename'] );
-		remove_filter( 'wp_unique_filename', '_wc_shiptastic_keep_force_filename', 10 );
+		if ( $force_override ) {
+			unset( $GLOBALS['stc_unique_filename'] );
+			remove_filter( 'wp_unique_filename', '_wc_shiptastic_keep_force_filename', 10 );
+		}
+
 		Package::unset_upload_dir_filter();
 
 		if ( isset( $tmp['file'] ) ) {
@@ -1052,7 +1089,7 @@ function wc_shiptastic_upload_data( $filename, $bits, $relative = true ) {
 			throw new Exception( sprintf( esc_html_x( 'Error while uploading file: %1$s', 'shipments', 'shiptastic-for-woocommerce' ), esc_html( $error_msg ) ) );
 		}
 	} catch ( Exception $e ) {
-		return false;
+		return new WP_Error( 'file-upload', $e->getMessage() );
 	}
 }
 
@@ -1247,7 +1284,7 @@ function wc_stc_render_shipment_action_buttons( $actions ) {
 				$custom_attributes .= ' ' . esc_attr( $attribute ) . '="' . esc_attr( $val ) . '"';
 			}
 
-			$actions_html .= sprintf( '<a class="%1$s" href="%2$s" aria-label="%3$s" title="%3$s" target="%4$s" %5$s>%6$s</a>', esc_attr( $classes ), esc_url( $action['url'] ), esc_attr( $action['title'] ), esc_attr( $action['target'] ), $custom_attributes, esc_html( $action['name'] ) );
+			$actions_html .= sprintf( '<a class="%1$s" href="%2$s" aria-label="%3$s" title="%3$s" target="%4$s" %5$s><span class="btn-content">%6$s</span></a>', esc_attr( $classes ), esc_url( $action['url'] ), esc_attr( $action['title'] ), esc_attr( $action['target'] ), $custom_attributes, esc_html( $action['name'] ) );
 		}
 	}
 
@@ -2047,4 +2084,393 @@ function wc_shiptastic_decode_html( $str ) {
  */
 function wc_stc_get_email_locale_helper( $email ) {
 	return new \Vendidero\Shiptastic\EmailLocale( $email );
+}
+
+/**
+ * @param int $attachment_id
+ *
+ * @return bool|\Vendidero\Shiptastic\ShipmentAttachment
+ */
+function wc_stc_get_shipment_attachment( $attachment_id = 0, $attachment_type = 'packing_slip', $force_default = false ) {
+	return ShipmentFactory::get_shipment_attachment( $attachment_id, $attachment_type, $force_default );
+}
+
+/**
+ * Get all available attachment types.
+ *
+ * @return array
+ */
+function wc_stc_get_shipment_attachment_types( $shipment_type = 'simple' ) {
+	$attachment_types = array(
+		'packing_slip'       => array(
+			'singular' => 'return' === $shipment_type ? _x( 'Return Slip', 'shipments-attachment-type-name', 'shiptastic-for-woocommerce' ) : _x( 'Packing Slip', 'shipments-attachment-type-name', 'shiptastic-for-woocommerce' ),
+			'plural'   => 'return' === $shipment_type ? _x( 'Return Slips', 'shipments-attachment-type-name-plural', 'shiptastic-for-woocommerce' ) : _x( 'Packing Slips', 'shipments-attachment-type-name-plural', 'shiptastic-for-woocommerce' ),
+			'supports' => array(
+				'upload',
+			),
+		),
+		'commercial_invoice' => array(
+			'singular' => _x( 'Commercial Invoice', 'shipments-attachment-type-name', 'shiptastic-for-woocommerce' ),
+			'plural'   => _x( 'Commercial Invoices', 'shipments-attachment-type-name-plural', 'shiptastic-for-woocommerce' ),
+			'supports' => array(
+				'upload',
+			),
+		),
+	);
+
+	if ( Package::base_country_supports_abd_document() ) {
+		$attachment_types['abd'] = array(
+			'singular' => _x( 'ABD (Export Declaration)', 'shipments-attachment-type-name', 'shiptastic-for-woocommerce' ),
+			'plural'   => _x( 'ABD (Export Declarations)', 'shipments-attachment-type-name-plural', 'shiptastic-for-woocommerce' ),
+			'supports' => array(
+				'upload',
+			),
+		);
+	}
+
+	/**
+	 * Add or adjust available shipment attachment types.
+	 *
+	 * @param array $attachment_types The available shipment attachment types.
+	 * @param string $document_type The shipment type
+	 */
+	$attachment_types = apply_filters( 'woocommerce_shiptastic_shipment_attachment_types', $attachment_types, $shipment_type );
+
+	foreach ( $attachment_types as $type => $args ) {
+		$args = wp_parse_args(
+			$args,
+			array(
+				'singular'   => '',
+				'plural'     => '',
+				'supports'   => array( 'upload' ),
+				'mime_types' => array(
+					'application/pdf',
+				),
+			)
+		);
+
+		$attachment_types[ $type ] = $args;
+	}
+
+	return $attachment_types;
+}
+
+function wc_stc_get_shipment_attachment_type_data( $type, $shipment_type = 'simple' ) {
+	$types = wc_stc_get_shipment_attachment_types( $shipment_type );
+
+	return array_key_exists( $type, $types ) ? $types[ $type ] : array(
+		'singular'   => '',
+		'plural'     => '',
+		'supports'   => array( 'upload' ),
+		'mime_types' => array(
+			'application/pdf',
+		),
+	);
+}
+
+/**
+ * @param Shipment $shipment
+ * @param string $attachment_type
+ * @param array $params
+ *
+ * @return \Vendidero\Shiptastic\ShipmentError|true
+ */
+function wc_stc_create_or_update_shipment_attachment( $shipment, $attachment_type, $params = array() ) {
+	$error     = new \Vendidero\Shiptastic\ShipmentError();
+	$supported = $shipment->get_supported_attachment_types();
+
+	if ( ! in_array( $attachment_type, array_keys( $supported ), true ) ) {
+		$error->add( 'attachment_not_supported', sprintf( _x( 'The shipment does not support attachments of type %s.', 'shipments', 'shiptastic-for-woocommerce' ), $attachment_type ) );
+
+		return $error;
+	}
+
+	$attachment = $shipment->get_attachment( $attachment_type );
+
+	if ( ! $attachment ) {
+		$attachment = wc_stc_create_shipment_attachment( $attachment_type );
+		$attachment->set_shipment( $shipment );
+	}
+
+	do_action( "woocommerce_shiptastic_before_create_shipment_attachment_{$attachment_type}", $attachment, $shipment, $error );
+
+	if ( wc_stc_shipment_wp_error_has_errors( $error ) ) {
+		return wc_stc_get_shipment_error( $error );
+	} elseif ( is_callable( array( $attachment, 'generate' ) ) ) {
+		$result = $attachment->generate( $shipment, $params );
+
+		if ( true === $result ) {
+			return true;
+		} elseif ( is_wp_error( $result ) ) {
+			return wc_stc_get_shipment_error( $result );
+		}
+	} else {
+		$error->add( 'attachment_not_supported', sprintf( _x( 'The shipment does not support attachments of type %s.', 'shipments', 'shiptastic-for-woocommerce' ), $attachment_type ) );
+	}
+
+	return $error;
+}
+
+function wc_stc_get_shipment_attachment_type_name( $type, $shipment_type = 'simple', $plural = false ) {
+	$label_key = $plural ? 'plural' : 'singular';
+
+	if ( is_array( $type ) ) {
+		$type = wp_parse_args(
+			$type,
+			array(
+				'singular' => '',
+				'plural'   => '',
+			)
+		);
+	} else {
+		$type = wc_stc_get_shipment_attachment_type_data( $type, $shipment_type );
+	}
+
+	return $type[ $label_key ];
+}
+
+function wc_stc_shipment_attachment_type_supports( $type, $what, $shipment_type = 'simple' ) {
+	if ( is_array( $type ) ) {
+		$type = wp_parse_args(
+			$type,
+			array(
+				'supports' => array(),
+			)
+		);
+	} else {
+		$type = wc_stc_get_shipment_attachment_type_data( $type, $shipment_type );
+	}
+
+	return in_array( $what, (array) $type['supports'], true );
+}
+
+/**
+ * @param Shipment $shipment
+ * @param string $attachment_type
+ *
+ * @return array
+ */
+function wc_stc_get_shipment_attachment_actions( $shipment, $attachment_type, $display_for = 'detail' ) {
+	$type_data  = wc_stc_get_shipment_attachment_type_data( $attachment_type, $shipment->get_type() );
+	$attachment = $shipment->get_attachment( $attachment_type );
+	$actions    = array();
+
+	if ( $attachment ) {
+		$actions['download'] = array(
+			'url'     => $attachment->get_download_url(),
+			'name'    => sprintf( _x( 'Download %s', 'shipments-attachment', 'shiptastic-for-woocommerce' ), wc_stc_get_shipment_attachment_type_name( $type_data ) ),
+			'action'  => 'download_attachment',
+			'classes' => 'download',
+			'target'  => '_blank',
+		);
+
+		if ( 'detail' === $display_for && wc_stc_shipment_attachment_type_supports( $type_data, 'create' ) && is_callable( array( $attachment, 'generate' ) ) ) {
+			$actions['refresh'] = array(
+				'name'              => sprintf( _x( 'Refresh %s', 'shipments-attachment', 'shiptastic-for-woocommerce' ), wc_stc_get_shipment_attachment_type_name( $type_data ) ),
+				'action'            => 'create_attachment',
+				'classes'           => 'refresh',
+				'custom_attributes' => array(
+					'data-attachment-type' => $attachment_type,
+				),
+			);
+		}
+
+		if ( 'detail' === $display_for ) {
+			$actions['delete'] = array(
+				'classes'           => 'remove-attachment delete',
+				'name'              => sprintf( _x( 'Delete %s', 'shipments-attachment', 'shiptastic-for-woocommerce' ), wc_stc_get_shipment_attachment_type_name( $type_data ) ),
+				'action'            => 'delete_attachment',
+				'custom_attributes' => array(
+					'data-attachment'      => $attachment->get_id(),
+					'data-attachment-type' => $attachment->get_type(),
+				),
+			);
+		}
+	} else {
+		if ( wc_stc_shipment_attachment_type_supports( $type_data, 'upload' ) ) {
+			$actions['upload'] = array(
+				'name'              => sprintf( _x( 'Upload %s', 'shipments-attachment', 'shiptastic-for-woocommerce' ), wc_stc_get_shipment_attachment_type_name( $type_data ) ),
+				'action'            => 'upload_attachment',
+				'classes'           => 'upload',
+				'custom_attributes' => array(
+					'data-attachment-type' => $attachment_type,
+				),
+			);
+		}
+
+		if ( wc_stc_shipment_attachment_type_supports( $type_data, 'create' ) ) {
+			$actions['create'] = array(
+				'name'              => sprintf( _x( 'Create %s', 'shipments-attachment', 'shiptastic-for-woocommerce' ), wc_stc_get_shipment_attachment_type_name( $type_data ) ),
+				'action'            => 'create_attachment',
+				'classes'           => 'create',
+				'custom_attributes' => array(
+					'data-attachment-type' => $attachment_type,
+				),
+			);
+		}
+	}
+
+	if ( wc_stc_shipment_attachment_type_supports( $type_data, 'create_modal' ) ) {
+		$action_key = 'create';
+
+		if ( array_key_exists( 'refresh', $actions ) ) {
+			$action_key = 'refresh';
+		}
+
+		if ( array_key_exists( $action_key, $actions ) ) {
+			$actions[ $action_key ]['has_modal']         = true;
+			$actions[ $action_key ]['action']            = 'create_attachment_modal';
+			$actions[ $action_key ]['classes']          .= ' has-shipment-modal';
+			$actions[ $action_key ]['custom_attributes'] = array_merge(
+				$actions[ $action_key ]['custom_attributes'],
+				array(
+					'id'                         => "wc-stc-create-attachment-modal-{$attachment_type}-{$shipment->get_id()}",
+					'data-reference'             => $shipment->get_id(),
+					'data-id'                    => "wc-stc-create-attachment-modal-{$attachment_type}",
+					'data-nonce-params'          => 'wc_shiptastic_admin_shipment_attachments_params',
+					'data-param_attachment_type' => $attachment_type,
+					'data-action'                => 'woocommerce_stc_create_shipment_attachment',
+					'data-load-async'            => true,
+				)
+			);
+		}
+	}
+
+	return apply_filters( 'woocommerce_shiptastic_shipment_attachment_actions', $actions, $shipment, $attachment_type, $display_for, $attachment );
+}
+
+/**
+ * Tries to extract tracking info from a string by looking for keywords e.g. shipment.
+ *
+ * @param $tracking_str
+ *
+ * @return array
+ */
+function wc_stc_extract_tracking_info_from_string( $tracking_str ) {
+	$clean_label_cb = function ( $label ) {
+		return trim( preg_replace( '/\s+/', ' ', preg_replace( '/[^\w| ]/', ' ', strtolower( trim( $label ) ) ) ) );
+	};
+
+	$build_word_regex_cb = function ( $words ) {
+		return '/(' . implode( '|', array_map( 'preg_quote', $words ) ) . ')/';
+	};
+
+	$shipment_label_lookup = array_map(
+		$clean_label_cb,
+		array(
+			_x( 'Shipment', 'shipments', 'shiptastic-for-woocommerce' ),
+			'Shipment',
+		)
+	);
+
+	$third_party_provider_lookup = array_map(
+		$clean_label_cb,
+		apply_filters(
+			'woocommerce_shiptastic_third_party_tracking_providers',
+			array(
+				'SendCloud',
+				'SendDrop',
+				'ShipStation',
+				'Pirate Ship',
+				'Skydropx',
+				'Envia',
+				'Easyship',
+				'Packlink',
+			)
+		)
+	);
+
+	$shipping_provider_label_lookup = array_map(
+		$clean_label_cb,
+		array(
+			_x( 'Shipping Provider', 'shipments', 'shiptastic-for-woocommerce' ),
+			'Shipping Provider',
+			'Shipping Carrier',
+			'Carrier',
+		)
+	);
+
+	$words                         = $clean_label_cb( $tracking_str );
+	$contains_shipment             = preg_match( $build_word_regex_cb( $shipment_label_lookup ), $words );
+	$contains_third_party_provider = preg_match( $build_word_regex_cb( $third_party_provider_lookup ), $words, $contains_third_party_providers_found );
+	$tracking_info                 = array(
+		'tracking_id'             => '',
+		'tracking_url'            => '',
+		'shipping_provider_title' => '',
+		'shipping_provider_name'  => '',
+		'third_party_provider'    => '',
+		'confidence_score'        => 0.0,
+	);
+
+	if ( $contains_shipment || $contains_third_party_provider ) {
+		if ( ! empty( $contains_third_party_providers_found ) ) {
+			$tracking_info['third_party_provider'] = wc_clean( array_values( $contains_third_party_providers_found )[0] );
+		}
+
+		$tracking_info['confidence_score'] = 0.5;
+		$line_by_line                      = preg_split( "/\r\n|\n|\r/", $tracking_str );
+
+		foreach ( $line_by_line as $line ) {
+			$line = trim( preg_replace( '/\s+/', ' ', $line ) );
+
+			if ( empty( $line ) ) {
+				continue;
+			}
+
+			$content_parts         = explode( ': ', $line );
+			$is_label_value_format = 2 === count( $content_parts );
+
+			$next_is_shipping_carrier_label = false;
+
+			foreach ( $content_parts as $i => $content_part ) {
+				$content_part        = trim( $content_part );
+				$content_part_words  = preg_split( '/\s+/', $content_part );
+				$contains_alpha_only = preg_match( '/^\w*$/', $content_part_words[0], $tracking_number );
+				$contains_digit      = preg_match( '/\d/', $content_part_words[0] );
+				$content_part_clean  = $clean_label_cb( $content_part );
+
+				if ( $contains_alpha_only && $contains_digit && strlen( $tracking_number[0] ) >= 8 ) {
+					$tracking_info['tracking_id']       = $tracking_number[0];
+					$tracking_info['confidence_score'] += .25;
+				} elseif ( wc_is_valid_url( $content_part_words[0] ) ) {
+					$tracking_info['tracking_url']      = esc_url_raw( $content_part_words[0] );
+					$tracking_info['confidence_score'] += .125;
+				} elseif ( $next_is_shipping_carrier_label ) {
+					$tracking_info['shipping_provider_title'] = $is_label_value_format ? wc_clean( $content_part ) : wc_clean( implode( ' ', array_slice( $content_part_words, 0, 2 ) ) );
+					$tracking_info['confidence_score']       += .125;
+				}
+
+				$next_is_shipping_carrier_label = false;
+				$contains_shipping_provider     = preg_match( $build_word_regex_cb( $shipping_provider_label_lookup ), $content_part_clean );
+
+				if ( $contains_shipping_provider ) {
+					$next_is_shipping_carrier_label = true;
+				}
+			}
+		}
+	}
+
+	$tracking_info = apply_filters( 'woocommerce_shiptastic_extract_tracking_info_from_string', $tracking_info, $tracking_str );
+	$tracking_info = wp_parse_args(
+		$tracking_info,
+		array(
+			'tracking_id'             => '',
+			'tracking_url'            => '',
+			'shipping_provider_title' => '',
+			'shipping_provider_name'  => '',
+			'third_party_provider'    => '',
+			'confidence_score'        => 0.0,
+		)
+	);
+
+	if ( ! empty( $tracking_info['shipping_provider_title'] ) && empty( $tracking_info['shipping_provider_name'] ) ) {
+		$provider = Helper::instance()->get_shipping_provider_by_title( $tracking_info['shipping_provider_title'] );
+		$provider = apply_filters( 'woocommerce_shiptastic_find_shipping_provider_by_tracking_info', $provider, $tracking_info['shipping_provider_title'], $tracking_info );
+
+		if ( $provider ) {
+			$tracking_info['shipping_provider_name'] = $provider->get_name();
+		}
+	}
+
+	return $tracking_info;
 }

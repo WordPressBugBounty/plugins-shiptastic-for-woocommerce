@@ -50,6 +50,11 @@ class Ajax {
 			'create_shipment_label_submit',
 			'preview_shipment_load',
 			'remove_shipment_label',
+			'upload_shipment_attachment',
+			'create_shipment_attachment',
+			'create_shipment_attachment_load',
+			'create_shipment_attachment_submit',
+			'remove_shipment_attachment',
 			'send_return_shipment_notification_email',
 			'confirm_return_request',
 			'create_return_page',
@@ -277,6 +282,276 @@ class Ajax {
 		wp_send_json( $response );
 	}
 
+	public static function upload_shipment_attachment() {
+		check_ajax_referer( 'upload-shipment-attachment', 'security' );
+
+		if ( ! current_user_can( 'edit_shop_orders' ) || ! isset( $_POST['shipment_id'] ) || ! isset( $_FILES['shipment_attachments'] ) ) {
+			wp_die( -1 );
+		}
+
+		$shipment_id    = absint( $_POST['shipment_id'] );
+		$response       = array();
+		$response_error = array(
+			'success'  => false,
+			'messages' => array(),
+		);
+
+		if ( ! $shipment = wc_stc_get_shipment( $shipment_id ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$attachments      = (array) $_FILES['shipment_attachments']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$files            = array();
+		$attachment_types = array();
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		foreach ( $attachments['name'][ $shipment_id ] as $attachment_type => $name ) {
+			$files[ $attachment_type ] = array(
+				'name'     => $name,
+				'type'     => $attachments['type'][ $shipment_id ][ $attachment_type ],
+				'tmp_name' => $attachments['tmp_name'][ $shipment_id ][ $attachment_type ],
+				'size'     => $attachments['size'][ $shipment_id ][ $attachment_type ],
+				'error'    => $attachments['error'][ $shipment_id ][ $attachment_type ],
+			);
+		}
+
+		foreach ( $files as $attachment_type => $file_data ) {
+			Package::set_upload_dir_filter();
+			$file = wp_handle_upload( $file_data, array( 'test_form' => false ) );
+			Package::unset_upload_dir_filter();
+
+			if ( isset( $file['error'] ) ) {
+				$response_error['messages'][] = sprintf( _x( 'There was an error uploading the %1$s: %2$s', 'shipments', 'shiptastic-for-woocommerce' ), wc_stc_get_shipment_attachment_type_name( $attachment_type, $shipment->get_type() ), $file['error'] );
+			} else {
+				$attachment         = wc_stc_create_shipment_attachment( $attachment_type );
+				$attachment_types[] = $attachment_type;
+
+				if ( ! is_wp_error( $attachment ) ) {
+					$attachment->set_relative_path( $file['file'] );
+					$attachment->set_extension( $file['type'] );
+
+					$shipment->add_attachment( $attachment );
+					$shipment->save();
+				}
+			}
+		}
+
+		if ( ! empty( $response_error['messages'] ) ) {
+			wp_send_json( $response_error );
+		} else {
+			$response = array(
+				'success'       => true,
+				'shipment_id'   => $shipment->get_id(),
+				'needs_refresh' => true,
+				'fragments'     => array(),
+			);
+
+			foreach ( $attachment_types as $attachment_type ) {
+				$response['fragments'][ "div#shipment-{$shipment_id} .wc-stc-shipment-attachment-{$attachment_type}" ] = self::get_shipment_attachment_html( $shipment, $attachment_type );
+
+				$actions = wc_stc_get_shipment_attachment_actions( $shipment, $attachment_type, 'table' );
+
+				if ( array_key_exists( 'download', $actions ) ) {
+					$html = wc_stc_render_shipment_action_buttons( array( $actions['download'] ) );
+
+					$response['fragments'][ "tr#shipment-{$shipment->get_id()} a.upload[data-attachment-type='{$attachment_type}']" ] = $html;
+				}
+			}
+
+			wp_send_json( $response );
+		}
+	}
+
+	public static function create_shipment_attachment_submit() {
+		check_ajax_referer( 'create-shipment-attachment-submit', 'security' );
+
+		if ( ! current_user_can( 'edit_shop_orders' ) || ! isset( $_POST['reference_id'], $_POST['attachment_type'] ) ) {
+			wp_die( -1 );
+		}
+
+		$shipment_id     = absint( $_POST['reference_id'] );
+		$attachment_type = wc_clean( wp_unslash( $_POST['attachment_type'] ) );
+		$response_error  = array(
+			'success'  => false,
+			'messages' => array(
+				_x( 'There was an error creating the attachment.', 'shipments', 'shiptastic-for-woocommerce' ),
+			),
+		);
+
+		if ( ! $shipment = wc_stc_get_shipment( $shipment_id ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$attachment_types = $shipment->get_supported_attachment_types();
+
+		if ( ! array_key_exists( $attachment_type, $attachment_types ) || ! wc_stc_shipment_attachment_type_supports( $attachment_type, 'create_modal', $shipment->get_type() ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$response = self::create_or_update_shipment_attachment( $shipment, $attachment_type );
+
+		wp_send_json( $response );
+	}
+
+	protected static function create_or_update_shipment_attachment( $shipment, $attachment_type ) {
+		$params         = (array) wc_clean( wp_unslash( isset( $_POST[ "{$attachment_type}" ] ) ? $_POST[ "{$attachment_type}" ] : array() ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$response_error = array(
+			'success'  => false,
+			'messages' => array(
+				_x( 'There was an error creating the attachment.', 'shipments', 'shiptastic-for-woocommerce' ),
+			),
+		);
+
+		$result = wc_stc_create_or_update_shipment_attachment( $shipment, $attachment_type, $params );
+
+		if ( is_wp_error( $result ) ) {
+			$response_error['messages'] = $result->get_error_messages();
+
+			return $response_error;
+		} else {
+			$response = array(
+				'success'       => true,
+				'shipment_id'   => $shipment->get_id(),
+				'needs_refresh' => true,
+				'fragments'     => array(
+					"div#shipment-{$shipment->get_id()} .wc-stc-shipment-attachment-{$attachment_type}" => self::get_shipment_attachment_html( $shipment, $attachment_type ),
+				),
+			);
+
+			$actions = wc_stc_get_shipment_attachment_actions( $shipment, $attachment_type, 'table' );
+
+			if ( array_key_exists( 'download', $actions ) ) {
+				$html = wc_stc_render_shipment_action_buttons( array( $actions['download'] ) );
+
+				$response['fragments'][ "tr#shipment-{$shipment->get_id()} a.create[data-attachment-type='{$attachment_type}']" ] = $html;
+			}
+
+			return $response;
+		}
+	}
+
+	public static function create_shipment_attachment_load() {
+		check_ajax_referer( 'create-shipment-attachment-load', 'security' );
+
+		if ( ! current_user_can( 'edit_shop_orders' ) || ! isset( $_POST['reference_id'], $_POST['attachment_type'] ) ) {
+			wp_die( -1 );
+		}
+
+		$shipment_id     = absint( $_POST['reference_id'] );
+		$attachment_type = wc_clean( wp_unslash( $_POST['attachment_type'] ) );
+		$response_error  = array(
+			'success'  => false,
+			'messages' => array(
+				_x( 'There was an error creating the attachment.', 'shipments', 'shiptastic-for-woocommerce' ),
+			),
+		);
+
+		if ( ! $shipment = wc_stc_get_shipment( $shipment_id ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$attachment_types = $shipment->get_supported_attachment_types();
+
+		if ( ! array_key_exists( $attachment_type, $attachment_types ) || ! wc_stc_shipment_attachment_type_supports( $attachment_type, 'create_modal', $shipment->get_type() ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$html = apply_filters( "woocommerce_shiptastic_create_shipment_attachment_{$attachment_type}_form_html", '', $shipment, $attachment_type );
+
+		if ( empty( $html ) ) {
+			wp_send_json( $response_error );
+		} else {
+			$response = array(
+				'fragments'   => array(
+					'.wc-stc-shipment-create-attachment-modal' => '<div class="wc-stc-shipment-create-attachment-modal">' . $html . '</div>',
+				),
+				'shipment_id' => $shipment_id,
+				'success'     => true,
+			);
+
+			wp_send_json( $response );
+		}
+	}
+
+	public static function create_shipment_attachment() {
+		check_ajax_referer( 'create-shipment-attachment', 'security' );
+
+		if ( ! current_user_can( 'edit_shop_orders' ) || ! isset( $_POST['shipment_id'], $_POST['attachment_type'] ) ) {
+			wp_die( -1 );
+		}
+
+		$response       = array();
+		$response_error = array(
+			'success'  => false,
+			'messages' => array(
+				_x( 'There was an error creating the attachment.', 'shipments', 'shiptastic-for-woocommerce' ),
+			),
+		);
+
+		$shipment_id     = absint( $_POST['shipment_id'] );
+		$attachment_type = wc_clean( wp_unslash( $_POST['attachment_type'] ) );
+		$display_for     = wc_clean( wp_unslash( isset( $_POST['display_for'] ) ? $_POST['display_for'] : 'details' ) );
+
+		if ( ! $shipment = wc_stc_get_shipment( $shipment_id ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$supported = array_keys( $shipment->get_supported_attachment_types() );
+
+		if ( ! in_array( $attachment_type, $supported, true ) ) {
+			wp_send_json( $response_error );
+		}
+
+		$response = self::create_or_update_shipment_attachment( $shipment, $attachment_type, $display_for );
+
+		wp_send_json( $response );
+	}
+
+	public static function remove_shipment_attachment() {
+		check_ajax_referer( 'remove-shipment-attachment', 'security' );
+
+		if ( ! current_user_can( 'edit_shop_orders' ) || ! isset( $_POST['shipment_id'], $_POST['attachment_type'] ) ) {
+			wp_die( -1 );
+		}
+
+		$response       = array();
+		$response_error = array(
+			'success'  => false,
+			'messages' => array(
+				_x( 'There was an error deleting the attachment.', 'shipments', 'shiptastic-for-woocommerce' ),
+			),
+		);
+
+		$shipment_id     = absint( $_POST['shipment_id'] );
+		$attachment_type = wc_clean( wp_unslash( $_POST['attachment_type'] ) );
+
+		if ( ! $shipment = wc_stc_get_shipment( $shipment_id ) ) {
+			wp_send_json( $response_error );
+		}
+
+		if ( ! $attachment = $shipment->get_attachment( $attachment_type ) ) {
+			wp_send_json( $response_error );
+		}
+
+		if ( $shipment->remove_attachment( $attachment_type ) ) {
+			$shipment->save();
+
+			$response = array(
+				'success'       => true,
+				'shipment_id'   => $shipment->get_id(),
+				'needs_refresh' => true,
+				'fragments'     => array(
+					"div#shipment-{$shipment_id} .wc-stc-shipment-attachment-{$attachment_type}" => self::get_shipment_attachment_html( $shipment, $attachment_type ),
+				),
+			);
+
+			wp_send_json( $response );
+		}
+
+		wp_send_json( $response_error );
+	}
+
 	public static function remove_shipment_label() {
 		check_ajax_referer( 'remove-shipment-label', 'security' );
 
@@ -401,6 +676,23 @@ class Ajax {
 
 		ob_start();
 		include Package::get_path() . '/includes/admin/views/html-order-shipment.php';
+		$html = ob_get_clean();
+
+		return $html;
+	}
+
+	/**
+	 * @param Shipment $p_shipment
+	 * @param string $p_attachment_type
+	 *
+	 * @return string
+	 */
+	protected static function get_shipment_attachment_html( $p_shipment, $p_attachment_type ) {
+		$shipment        = $p_shipment;
+		$attachment_type = $p_attachment_type;
+
+		ob_start();
+		include Package::get_path() . '/includes/admin/views/html-order-shipment-attachment.php';
 		$html = ob_get_clean();
 
 		return $html;
@@ -534,6 +826,8 @@ class Ajax {
 				ShippingProvider\Helper::instance()->load_shipping_providers();
 
 				if ( $provider = wc_stc_get_shipping_provider( $provider_name ) ) {
+					$provider->activate();
+
 					$success      = true;
 					$redirect_url = $provider->get_edit_link();
 				} else {
@@ -630,7 +924,7 @@ class Ajax {
 			'message' => '',
 		);
 
-		$handlers = Admin::get_bulk_action_handlers();
+		$handlers = Admin::get_bulk_action_handlers( $type );
 
 		if ( ! array_key_exists( $action, $handlers ) ) {
 			wp_send_json( $response_error );

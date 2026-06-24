@@ -24,7 +24,6 @@ defined( 'ABSPATH' ) || exit;
 		 */
 		do_action( 'woocommerce_shiptastic_shipment_admin_before_columns', $shipment );
 		?>
-
 		<div class="column col-6">
 			<div class="columns">
 				<div class="column col-4">
@@ -135,6 +134,10 @@ defined( 'ABSPATH' ) || exit;
 				<div class="column col-6">
 					<div class="columns">
 						<?php
+						foreach ( array_keys( $shipment->get_supported_attachment_types() ) as $attachment_type ) :
+							include 'html-order-shipment-attachment.php';
+						endforeach;
+
 						/**
 						 * Action that fires after the right column of a Shipment's meta box admin view.
 						 *

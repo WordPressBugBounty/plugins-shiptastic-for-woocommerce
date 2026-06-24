@@ -17,6 +17,7 @@ window.shiptastic.admin = window.shiptastic.admin || {};
             needsItems   : true,
             addItemModal : false,
             modals       : [],
+            mediaFrame   : null,
         };
 
         /*

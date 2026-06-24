@@ -74,11 +74,23 @@ abstract class Shipment extends WC_Data {
 	protected $items = null;
 
 	/**
+	 * @var null|ShipmentAttachment[]
+	 */
+	protected $attachments = null;
+
+	/**
 	 * List of items to be deleted on save.
 	 *
-	 * @var Shipment[]
+	 * @var ShipmentItem[]
 	 */
 	protected $items_to_delete = array();
+
+	/**
+	 * List of items to be deleted on save.
+	 *
+	 * @var ShipmentAttachment[]
+	 */
+	protected $attachments_to_delete = array();
 
 	protected $items_to_pack = null;
 
@@ -173,8 +185,6 @@ abstract class Shipment extends WC_Data {
 		'est_delivery_date'               => null,
 		'packaging_id'                    => 0,
 		'version'                         => '',
-		'packing_slip_path'               => '',
-		'commercial_invoice_path'         => '',
 		'is_locked'                       => false,
 	);
 
@@ -1076,6 +1086,18 @@ abstract class Shipment extends WC_Data {
 		return $code;
 	}
 
+	public function get_pickup_location_shipping_provider() {
+		$code     = $this->get_pickup_location_code( 'edit' );
+		$provider = $this->get_shipping_provider();
+
+		if ( ! empty( $code ) ) {
+			$code_parts = wc_stc_get_pickup_location_code_parts( $code );
+			$provider   = ! empty( $code_parts['shipping_provider'] ) ? $code_parts['shipping_provider'] : $provider;
+		}
+
+		return $provider;
+	}
+
 	/**
 	 * Retrieves the pickup location customer number, in case existent.
 	 *
@@ -1087,9 +1109,11 @@ abstract class Shipment extends WC_Data {
 	}
 
 	public function has_pickup_location() {
-		$code = $this->get_pickup_location_code();
+		$code                = $this->get_pickup_location_code();
+		$provider            = $this->get_pickup_location_shipping_provider();
+		$has_pickup_location = ! empty( $code ) && str_replace( '_', '', $provider ) === str_replace( '_', '', $this->get_shipping_provider() );
 
-		return apply_filters( "{$this->get_general_hook_prefix()}has_pickup_location", ! empty( $code ), $this );
+		return apply_filters( "{$this->get_general_hook_prefix()}has_pickup_location", $has_pickup_location, $this );
 	}
 
 	/**
@@ -2472,7 +2496,16 @@ abstract class Shipment extends WC_Data {
 	 * @param string $path The path.
 	 */
 	public function set_packing_slip_path( $path ) {
-		$this->set_prop( 'packing_slip_path', $path );
+		$attachment = $this->get_attachment( 'packing_slip' );
+
+		if ( ! $attachment || ! is_a( $attachment, '\Vendidero\Shiptastic\ShipmentAttachment' ) ) {
+			$attachment = wc_stc_create_shipment_attachment( 'packing_slip', true );
+			$this->add_attachment( $attachment );
+		}
+
+		if ( is_callable( array( $attachment, 'upload_from_file' ) ) ) {
+			$attachment->upload_from_file( $path );
+		}
 	}
 
 	/**
@@ -2481,7 +2514,16 @@ abstract class Shipment extends WC_Data {
 	 * @param string $path The path.
 	 */
 	public function set_commercial_invoice_path( $path ) {
-		$this->set_prop( 'commercial_invoice_path', $path );
+		$attachment = $this->get_attachment( 'commercial_invoice' );
+
+		if ( ! $attachment || ! is_a( $attachment, '\Vendidero\Shiptastic\ShipmentAttachment' ) ) {
+			$attachment = wc_stc_create_shipment_attachment( 'commercial_invoice', true );
+			$this->add_attachment( $attachment );
+		}
+
+		if ( is_callable( array( $attachment, 'upload_from_file' ) ) ) {
+			$attachment->upload_from_file( $path );
+		}
 	}
 
 	/**
@@ -2715,6 +2757,119 @@ abstract class Shipment extends WC_Data {
 			// Reset
 			$this->set_props( $props );
 		}
+
+		return true;
+	}
+
+	public function get_supported_attachment_types() {
+		$types = wc_stc_get_shipment_attachment_types( $this->get_type() );
+
+		if ( ! $this->is_shipping_international() ) {
+			if ( array_key_exists( 'commercial_invoice', $types ) ) {
+				unset( $types['commercial_invoice'] );
+			}
+
+			if ( array_key_exists( 'abd', $types ) ) {
+				unset( $types['abd'] );
+			}
+		}
+
+		return apply_filters( "{$this->get_hook_prefix()}supported_attachment_types", $types, $this );
+	}
+
+	/**
+	 * Return an array of attachments within this document.
+	 *
+	 * @return ShipmentAttachment[]
+	 */
+	public function get_attachments( $types = '' ) {
+		$supported_types = array_keys( $this->get_supported_attachment_types() );
+		$types           = array_filter( (array) ( empty( $types ) ? $supported_types : $types ) );
+		$types           = array_intersect( $types, $supported_types );
+		$attachments     = array();
+
+		if ( is_null( $this->attachments ) ) {
+			$this->attachments = $this->data_store->read_attachments( $this );
+		}
+
+		$all_attachments = apply_filters( "{$this->get_hook_prefix()}attachments", (array) $this->attachments, $this );
+
+		foreach ( $types as $type ) {
+			if ( ! empty( $all_attachments[ $type ] ) ) {
+				$attachments[] = $all_attachments[ $type ];
+			}
+		}
+
+		// Refresh document reference
+		foreach ( $attachments as $attachment ) {
+			$attachment->set_shipment( $this );
+		}
+
+		return $attachments;
+	}
+
+	/**
+	 * Adds a shipment attachment to this shipment. The shipment attachment will not persist until save.
+	 *
+	 * @since 3.0.0
+	 * @param ShipmentAttachment $attachment Shipment attachment object.
+	 *
+	 * @return false|void
+	 */
+	public function add_attachment( $attachment ) {
+		if ( ! in_array( $attachment->get_type(), array_keys( $this->get_supported_attachment_types() ), true ) ) {
+			return false;
+		}
+
+		// Set parent.
+		$attachment->set_shipment( $this );
+
+		// Load existing attachments
+		$this->get_attachments();
+
+		/**
+		 * Remove existing attachment before overriding.
+		 */
+		if ( ! empty( $this->attachments[ $attachment->get_type() ] ) ) {
+			$this->remove_attachment( $attachment->get_type() );
+		}
+
+		$this->attachments[ $attachment->get_type() ] = $attachment;
+
+		do_action( "{$this->get_general_hook_prefix()}added_attachment", $attachment, $this );
+	}
+
+	/**
+	 * Get a attachment object.
+	 *
+	 * @param string $type Attachment type.
+	 *
+	 * @return ShipmentAttachment|false
+	 */
+	public function get_attachment( $type ) {
+		$attachments = $this->get_attachments( $type );
+
+		return ! empty( $attachments ) ? array_values( $attachments )[0] : false;
+	}
+
+	/**
+	 * Remove attachment from the document.
+	 *
+	 * @param string $type Type to delete
+	 *
+	 * @return boolean
+	 */
+	public function remove_attachment( $type ) {
+		$attachment = $this->get_attachment( $type );
+
+		if ( ! $attachment ) {
+			return false;
+		}
+
+		// Unset and remove later
+		$this->attachments_to_delete[] = $attachment;
+
+		unset( $this->attachments[ $attachment->get_type() ] );
 
 		return true;
 	}
@@ -3008,6 +3163,11 @@ abstract class Shipment extends WC_Data {
 		$this->sync_packaging();
 	}
 
+	public function remove_attachments() {
+		$this->data_store->delete_attachments( $this );
+		$this->attachments = array();
+	}
+
 	/**
 	 * Save all items which are part of this shipment.
 	 */
@@ -3034,6 +3194,22 @@ abstract class Shipment extends WC_Data {
 
 				$items_changed = true;
 			}
+		}
+	}
+
+	/**
+	 * Save all attachments which are part of this shipment.
+	 */
+	protected function save_attachments() {
+		foreach ( $this->attachments_to_delete as $attachment ) {
+			$attachment->delete();
+		}
+
+		$this->attachments_to_delete = array();
+
+		foreach ( $this->get_attachments() as $attachment_key => $attachment ) {
+			$attachment->set_shipment( $this );
+			$attachment->save();
 		}
 	}
 
@@ -3073,13 +3249,11 @@ abstract class Shipment extends WC_Data {
 	 * @return integer
 	 */
 	public function get_packing_slip_path( $context = 'view' ) {
-		$path = $this->get_prop( 'packing_slip_path', $context );
-
-		if ( 'view' === $context && ! empty( $path ) ) {
-			$path = Package::get_file_by_path( $path );
+		if ( $attachment = $this->get_attachment( 'packing_slip' ) ) {
+			return $attachment->get_path();
 		}
 
-		return $path;
+		return '';
 	}
 
 	/**
@@ -3089,13 +3263,11 @@ abstract class Shipment extends WC_Data {
 	 * @return integer
 	 */
 	public function get_commercial_invoice_path( $context = 'view' ) {
-		$path = $this->get_prop( 'commercial_invoice_path', $context );
-
-		if ( 'view' === $context && ! empty( $path ) ) {
-			$path = Package::get_file_by_path( $path );
+		if ( $attachment = $this->get_attachment( 'commercial_invoice' ) ) {
+			return $attachment->get_path();
 		}
 
-		return $path;
+		return '';
 	}
 
 	/**
@@ -3640,6 +3812,7 @@ abstract class Shipment extends WC_Data {
 			}
 
 			$this->save_items();
+			$this->save_attachments();
 
 			if ( $cache = Helper::get_cache_object( 'shipments' ) ) {
 				$cache->remove( $this->get_id() );

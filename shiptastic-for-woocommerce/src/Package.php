@@ -19,11 +19,13 @@ class Package {
 	 *
 	 * @var string
 	 */
-	const VERSION = '5.0.4';
+	const VERSION = '5.1.0';
 
 	public static $upload_dir_suffix = '';
 
 	protected static $iso = null;
+
+	protected static $holidays = null;
 
 	protected static $street_formats = null;
 
@@ -41,7 +43,15 @@ class Package {
 		self::maybe_set_upload_dir();
 		self::init_hooks();
 		self::includes();
-		self::load_compatibilities();
+
+		/**
+		 * Defer loading compatibilities until the plugins_loaded hooks has "fully" traversed.
+		 */
+		if ( doing_action( 'plugins_loaded' ) ) {
+			add_action( 'plugins_loaded', array( __CLASS__, 'load_compatibilities' ), 9999 );
+		} else {
+			self::load_compatibilities();
+		}
 
 		do_action( 'woocommerce_shiptastic_init' );
 	}
@@ -81,7 +91,9 @@ class Package {
 	public static function refresh_oauth_token( $api_name ) {
 		if ( $api = Helper::get_api( $api_name ) ) {
 			if ( $auth = $api->get_auth_api() ) {
-				$auth->auth();
+				if ( $auth->is_connected() ) {
+					$auth->auth();
+				}
 			}
 		}
 	}
@@ -489,6 +501,62 @@ class Package {
 		return apply_filters( 'woocommerce_shiptastic_shipment_base_postcode', $shipment_postcode );
 	}
 
+	public static function get_holidays( $country ) {
+		if ( is_null( self::$holidays ) ) {
+			self::$holidays = include self::get_path() . '/i18n/holidays.php';
+		}
+
+		$holidays = (array) self::$holidays;
+
+		if ( empty( $country ) ) {
+			return $holidays;
+		} else {
+			$country = strtoupper( $country );
+
+			return array_key_exists( $country, $holidays ) ? $holidays[ $country ] : array();
+		}
+	}
+
+	/**
+	 * @param \WC_DateTime $datetime
+	 *
+	 * @return bool
+	 */
+	public static function is_holiday( $datetime, $country = '' ) {
+		$country = empty( $country ) ? self::get_base_country() : $country;
+
+		return ( in_array( $datetime->date_i18n( 'Y-m-d' ), self::get_holidays( $country ), true ) ) ? true : false;
+	}
+
+	/**
+	 * @param \WC_DateTime $datetime
+	 * @param string $country
+	 *
+	 * @return bool
+	 */
+	public static function is_working_day( $datetime, $country = '' ) {
+		$country        = empty( $country ) ? self::get_base_country() : $country;
+		$is_working_day = ! self::is_holiday( $datetime, $country );
+
+		if ( $is_working_day ) {
+			/**
+			 * Filter to decide whether Shiptastic should consider saturday as a working day
+			 * for preferred day calculation or not.
+			 *
+			 * @param boolean $is_working_day True if saturday should be considered a working day.
+			 *
+			 * @since 3.0.0
+			 */
+			if ( apply_filters( 'woocommerce_shiptastic_consider_saturday_as_working_day', true ) ) {
+				$is_working_day = $datetime->date_i18n( 'N' ) > 6 ? false : true;
+			} else {
+				$is_working_day = $datetime->date_i18n( 'N' ) > 5 ? false : true;
+			}
+		}
+
+		return $is_working_day;
+	}
+
 	public static function base_country_belongs_to_eu_customs_area() {
 		return self::country_belongs_to_eu_customs_area( self::get_base_country(), self::get_base_postcode() );
 	}
@@ -549,7 +617,11 @@ class Package {
 	public static function base_country_supports_export_reference_number() {
 		$base_country = self::get_base_country();
 
-		return apply_filters( 'woocommerce_shiptastic_base_country_supports_export_reference_number', self::country_belongs_to_eu_customs_area( $base_country ) );
+		return apply_filters( 'woocommerce_shiptastic_base_country_supports_export_reference_number', self::country_belongs_to_eu_customs_area( $base_country ) || 'GB' === $base_country );
+	}
+
+	public static function base_country_supports_abd_document() {
+		return apply_filters( 'woocommerce_shiptastic_base_country_supports_abd_document', self::base_country_supports_export_reference_number() );
 	}
 
 	public static function get_available_incoterms() {
@@ -981,16 +1053,18 @@ class Package {
 
 		// List of tables without prefixes.
 		$tables = array(
-			'stc_shipment_itemmeta'     => 'woocommerce_stc_shipment_itemmeta',
-			'stc_shipmentmeta'          => 'woocommerce_stc_shipmentmeta',
-			'stc_shipments'             => 'woocommerce_stc_shipments',
-			'stc_shipment_labelmeta'    => 'woocommerce_stc_shipment_labelmeta',
-			'stc_shipment_labels'       => 'woocommerce_stc_shipment_labels',
-			'stc_shipment_items'        => 'woocommerce_stc_shipment_items',
-			'stc_shipping_provider'     => 'woocommerce_stc_shipping_provider',
-			'stc_shipping_providermeta' => 'woocommerce_stc_shipping_providermeta',
-			'stc_packaging'             => 'woocommerce_stc_packaging',
-			'stc_packagingmeta'         => 'woocommerce_stc_packagingmeta',
+			'stc_shipment_itemmeta'       => 'woocommerce_stc_shipment_itemmeta',
+			'stc_shipmentmeta'            => 'woocommerce_stc_shipmentmeta',
+			'stc_shipments'               => 'woocommerce_stc_shipments',
+			'stc_shipment_labelmeta'      => 'woocommerce_stc_shipment_labelmeta',
+			'stc_shipment_labels'         => 'woocommerce_stc_shipment_labels',
+			'stc_shipment_attachmentmeta' => 'woocommerce_stc_shipment_attachmentmeta',
+			'stc_shipment_attachments'    => 'woocommerce_stc_shipment_attachments',
+			'stc_shipment_items'          => 'woocommerce_stc_shipment_items',
+			'stc_shipping_provider'       => 'woocommerce_stc_shipping_provider',
+			'stc_shipping_providermeta'   => 'woocommerce_stc_shipping_providermeta',
+			'stc_packaging'               => 'woocommerce_stc_packaging',
+			'stc_packagingmeta'           => 'woocommerce_stc_packagingmeta',
 		);
 
 		foreach ( $tables as $name => $table ) {
@@ -1015,11 +1089,12 @@ class Package {
 	}
 
 	public static function register_data_stores( $stores ) {
-		$stores['shipment']          = 'Vendidero\Shiptastic\DataStores\Shipment';
-		$stores['shipment-label']    = 'Vendidero\Shiptastic\DataStores\Label';
-		$stores['packaging']         = 'Vendidero\Shiptastic\DataStores\Packaging';
-		$stores['shipment-item']     = 'Vendidero\Shiptastic\DataStores\ShipmentItem';
-		$stores['shipping-provider'] = 'Vendidero\Shiptastic\DataStores\ShippingProvider';
+		$stores['shipment']            = 'Vendidero\Shiptastic\DataStores\Shipment';
+		$stores['shipment-label']      = 'Vendidero\Shiptastic\DataStores\Label';
+		$stores['packaging']           = 'Vendidero\Shiptastic\DataStores\Packaging';
+		$stores['shipment-item']       = 'Vendidero\Shiptastic\DataStores\ShipmentItem';
+		$stores['shipping-provider']   = 'Vendidero\Shiptastic\DataStores\ShippingProvider';
+		$stores['shipment-attachment'] = 'Vendidero\Shiptastic\DataStores\ShipmentAttachment';
 
 		do_action( 'woocommerce_shiptastic_registered_data_stores' );
 

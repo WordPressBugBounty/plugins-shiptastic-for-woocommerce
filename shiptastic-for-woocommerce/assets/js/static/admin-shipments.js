@@ -172,21 +172,21 @@ window.shiptastic.admin = window.shiptastic.admin || {};
 
         getData: function( additionalData ) {
             var self = shipments.admin.shipments,
-                data = {};
+                data = new FormData();
 
             additionalData = additionalData || {};
 
             $.each( self.$wrapper.find( ':input[name]' ).serializeArray(), function( index, item ) {
-                if ( item.name.indexOf( '[]' ) !== -1 ) {
-                    item.name = item.name.replace( '[]', '' );
-                    data[ item.name ] = $.makeArray( data[ item.name ] );
-                    data[ item.name ].push( item.value );
-                } else {
-                    data[ item.name ] = item.value;
-                }
+                data.append( item.name, item.value );
             });
 
-            $.extend( data, additionalData );
+            $.each( self.$wrapper.find( ':input[type=file]' ), function() {
+                data.append( $( this ).prop( 'name' ), $( this ).prop( 'files' )[0] );
+            });
+
+            $.each( additionalData, function( index, item ) {
+                data.append(index, item);
+            } );
 
             return data;
         },
@@ -271,6 +271,8 @@ window.shiptastic.admin = window.shiptastic.admin || {};
                 type: "POST",
                 url:  url,
                 data: params,
+                processData: false,
+                contentType: false,
                 success: function( data ) {
                     if ( data.success ) {
                         if ( refreshFragments ) {
