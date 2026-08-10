@@ -2,8 +2,8 @@
 Contributors: vendidero, vdwoocommercesupport
 Tags: shipping, woocommerce, shipments, woo, fulfillment
 Requires at least: 5.4
-Tested up to: 7.0
-Stable tag: 5.1.1
+Tested up to: 7.1
+Stable tag: 5.1.2
 Requires PHP: 5.6
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
@@ -74,6 +74,13 @@ We recommend installing Shiptastic for WooCommerce through the WordPress Backend
 6. Manage returns
 
 == Changelog ==
+= 5.1.2 =
+* Improvement: WP 7.1 compatibility
+* Improvement: Add a guard to prevent running packing algo for a very high number of items
+* Fix: Aggregate weight logic for bundles
+* Fix: Exclude shipment_attachments query param in table view
+* Fix: Add unprefixed shipping_provider meta for block-based checkout
+
 = 5.1.1 =
 * Improvement: Store current pickup location code + customer number in customer session
 * Improvement: Store OAuth tokens within wp_options instead of transients to prevent issues with external object storage, e.g. memcached (which has a hard 30-day limit and may fail upon storing a transient with a longer lifetime).
