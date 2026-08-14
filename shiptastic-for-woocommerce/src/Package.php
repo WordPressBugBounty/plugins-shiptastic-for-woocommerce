@@ -19,7 +19,7 @@ class Package {
 	 *
 	 * @var string
 	 */
-	const VERSION = '5.1.3';
+	const VERSION = '5.1.4';
 
 	public static $upload_dir_suffix = '';
 
@@ -919,6 +919,7 @@ class Package {
 			return false;
 		}
 
+		$file    = realpath( $file );
 		$uploads = self::get_upload_dir();
 
 		if ( false !== $uploads['error'] ) {
@@ -929,6 +930,17 @@ class Package {
 
 		if ( false === $basedir ) {
 			return false;
+		}
+
+		/**
+		 * WIN systems have a backslash dir separator. Appending a forward slash via
+		 * trailingslashit may cause a different upload base dir, e.g. C:\\public\wp-content\uploads\storeabill-1234/.
+		 * Comparing that with the absolute file path which contains a backslash, e.g. C:\\public\wp-content\uploads\storeabill-1234\file.pdf will fail.
+		 * Tweak: Convert all backslashes to forward slashes for comparison instead.
+		 */
+		if ( defined( 'DIRECTORY_SEPARATOR' ) && '\\' === DIRECTORY_SEPARATOR ) {
+			$basedir = str_replace( '\\', '/', $basedir );
+			$file    = str_replace( '\\', '/', $file );
 		}
 
 		return 0 === strpos( trailingslashit( $file ), trailingslashit( $basedir ) );
@@ -949,7 +961,7 @@ class Package {
 		}
 
 		if ( ! self::path_is_inside_upload_dir( $file ) ) {
-			$file = '';
+			return false;
 		}
 
 		return $file;
