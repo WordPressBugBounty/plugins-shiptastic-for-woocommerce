@@ -54,6 +54,8 @@ class Install {
 			do_action( 'woocommerce_flush_rewrite_rules' );
 		}
 
+		\Vendidero\Shiptastic\Tracking\Helper::setup_recurring_actions();
+
 		do_action( 'shiptastic_installed' );
 	}
 
@@ -99,6 +101,10 @@ class Install {
 	private static function update( $db_version ) {
 		if ( version_compare( $db_version, '5.0.0', '<' ) ) {
 			update_option( 'woocommerce_shiptastic_allow_customer_self_arranged_returns', 'no' );
+		}
+
+		if ( version_compare( $db_version, '5.1.7', '<' ) && function_exists( 'as_unschedule_all_actions' ) ) {
+			as_unschedule_all_actions( 'woocommerce_shiptastic_shipments_tracking' );
 		}
 	}
 
@@ -646,6 +652,7 @@ CREATE TABLE {$wpdb->prefix}woocommerce_stc_shipments (
   shipment_date_sent_gmt datetime default NULL,
   shipment_est_delivery_date datetime default NULL,
   shipment_est_delivery_date_gmt datetime default NULL,
+  shipment_next_tracking_date_gmt datetime default NULL,
   shipment_status varchar(150) NOT NULL default 'draft',
   shipment_order_id bigint(20) unsigned NOT NULL DEFAULT 0,
   shipment_packaging_id bigint(20) unsigned NOT NULL DEFAULT 0,
@@ -660,7 +667,8 @@ CREATE TABLE {$wpdb->prefix}woocommerce_stc_shipments (
   PRIMARY KEY  (shipment_id),
   KEY shipment_order_id (shipment_order_id),
   KEY shipment_packaging_id (shipment_packaging_id),
-  KEY shipment_parent_id (shipment_parent_id)
+  KEY shipment_parent_id (shipment_parent_id),
+  KEY shipment_tracking_due (shipment_shipping_provider(100),shipment_status(50),shipment_next_tracking_date_gmt)
 ) $collate;
 CREATE TABLE {$wpdb->prefix}woocommerce_stc_shipment_attachments (
   attachment_id bigint(20) unsigned NOT NULL auto_increment,
